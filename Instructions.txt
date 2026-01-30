@@ -1,0 +1,90 @@
+- Models and logic.
+
+1. Users
+    1. Name
+    2. Email
+    3. Password
+    4. Credits ( Starts with 10 credits by default)
+    5. Avatar (See numeral 2)
+    6. Stats
+        1. Wins
+        2. Draws
+        3. Loses
+    7. Collection (List of avatar purchased, see numeral 2)
+        1. Avatar
+        2. Price
+        3. Timestamp
+2. Avatars, (List of characters that an user can purchase and select)
+    1. Name
+    2. Weapons
+        1. Rock
+            1. Title
+            2. Description
+            3. Images. Array of images.
+            4. Settings. empty object
+        2. Paper
+            1. Title
+            2. Description
+            3. Images. Array of images.
+            4. Settings. empty object
+        3. Sicsors
+            1. Title
+            2. Description
+            3. Images. Array of images.
+            4. Settings. empty object
+    3. Sprites
+        1. Profile
+        2. Base
+            1. Back view. Array of images
+            2. Front view.  Array of images
+        3. Attack
+            1. Rock
+                1. Load. Image
+                2. Attack. Array of images
+                3. Settings. empty object
+            2. Papper
+                1. Load. Image
+                2. Attack. Array of images
+                3. Settings. empty object
+            3. Scissors
+                1. Load. Image
+                2. Attack. Array of images.
+                3. Settings. empty object
+        4. Damage
+            1. Id
+            2. Image
+            3. Settings. empty object
+    4. Stats
+        1. Win
+        2. Loses
+        3. Draws
+    5. Price (in credits)
+3. Matchs
+    1. Player 1
+        1. User ID
+        2. Avatar ID
+    2. Player 2
+        1. User ID
+        2. Avatar ID
+    3. Rounds (Array of round)
+        1. Player 1 choice
+        2. Player 2 choice
+        3. Winner
+    4. Match Winner
+    5. Status (Searching, In progress, Complete)
+    6. Log
+        1. Timestamp
+        2. Message
+    7. Timestamp
+4. Signup user with email and passord, apple or google, login, logout
+5. Join/Create a match. An user can join to a match that is currently looking for a rival, if any match doesn’t exist then automatically a match would be created, this match  open a web socket where any other user can join, if an user join to the match the match start and pass the status to In progress
+6. Play the match, When a match is in progress the users will play a match of rocker paper and scissor, the winner is the one that win  a match of 3 of 5, every decision should be registered in the match model and close the match and the websocket when this happens, also should record the match as complete and save the winner.- Every decision also should be registered in the Log of messages.- An user can’t create or join in a match if doesn’t have an avatar- Update the users stats after complete.- If an user is inactive by 1 minute lose the match by W and the rival wins.
+7. Purchase an avatar, the user can purchase and avatar with their credits. save the history of purchases.
+8. Select avatar, an user can change the avatar for any of the ones that already purchased
+9. Purchase credits, add credits to user, sabe the history of purchases
+
+
+Use MongoDB Atlas, this is the connection to the database:
+mongodb+srv://sandbox:uCkSIQxQk88SfrI6@sandbox.32n4rhw.mongodb.net/?appName=sandbox
+
+Lastly, Generate a Readme explaining all the endpoints and a postman Collection
