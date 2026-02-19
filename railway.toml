@@ -1,0 +1,8 @@
+# Railway config: build and run without Docker (Nixpacks/Railpack).
+# See https://docs.railway.com/reference/build-and-start-commands
+
+[build]
+buildCommand = "npm run build"
+
+[deploy]
+startCommand = "npm run start:prod"
