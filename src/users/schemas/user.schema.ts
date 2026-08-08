@@ -9,7 +9,13 @@ import { SIGNUP_CREDITS } from '../../common/constants/game';
 
 export type UserDocument = User & Document;
 
-@Schema({ timestamps: true })
+/**
+ * `collection` está en la lista de nombres reservados de Mongoose y por defecto
+ * emite un aviso al arrancar. Lo mantenemos porque es el nombre que pide la
+ * especificación y el que consume la app. Es seguro en Mongoose 9: internamente
+ * usa `$collection` / `$__collection`, así que el path no tapa nada.
+ */
+@Schema({ timestamps: true, suppressReservedKeysWarning: true })
 export class User {
   @Prop({ required: true, trim: true })
   name: string;
