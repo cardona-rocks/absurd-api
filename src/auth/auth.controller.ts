@@ -25,6 +25,13 @@ export class AuthController {
     return this.authService.login(loginDto);
   }
 
+  /** Cuenta de invitado para probar el juego sin registrarse. */
+  @Public()
+  @Post('guest')
+  guest() {
+    return this.authService.loginAsGuest();
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('logout')
   logout() {

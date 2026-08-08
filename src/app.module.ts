@@ -6,21 +6,37 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { AvatarsModule } from './avatars/avatars.module';
 import { MatchesModule } from './matches/matches.module';
+import { PowerUpsModule } from './powerups/powerups.module';
+import { AchievementsModule } from './achievements/achievements.module';
+import { RankingsModule } from './rankings/rankings.module';
+import { TournamentsModule } from './tournaments/tournaments.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { AppController } from './app.controller';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    MongooseModule.forRoot(process.env.MONGODB_URI ?? 'mongodb+srv://sandbox:uCkSIQxQk88SfrI6@sandbox.32n4rhw.mongodb.net/absurd?retryWrites=true&w=majority&appName=sandbox'),
+    MongooseModule.forRootAsync({
+      useFactory: () => {
+        const uri = process.env.MONGODB_URI;
+        if (!uri) {
+          throw new Error(
+            'Falta MONGODB_URI. Copia .env.example a .env y pon tu cadena de conexión.',
+          );
+        }
+        return { uri };
+      },
+    }),
     AuthModule,
     UsersModule,
     AvatarsModule,
     MatchesModule,
+    PowerUpsModule,
+    AchievementsModule,
+    RankingsModule,
+    TournamentsModule,
   ],
   controllers: [AppController],
-  providers: [
-    { provide: APP_GUARD, useClass: JwtAuthGuard },
-  ],
+  providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }],
 })
 export class AppModule {}

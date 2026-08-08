@@ -1,35 +1,49 @@
-import { Controller, Get, Patch, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Body } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { CurrentUser, JwtPayload } from '../common/decorators/current-user.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { SelectAvatarDto } from './dto/select-avatar.dto';
 import { PurchaseCreditsDto } from './dto/purchase-credits.dto';
 import { PurchaseAvatarDto } from './dto/purchase-avatar.dto';
 
 @Controller('users')
-@UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('me')
-  me(@CurrentUser('sub') userId: string) {
-    return this.usersService.getOrThrow(userId).then((u) => this.usersService.toResponse(u));
+  async me(@CurrentUser('sub') userId: string) {
+    const user = await this.usersService.getOrThrow(userId);
+    return this.usersService.toResponse(user);
+  }
+
+  /** Colección de avatares comprados por el usuario. */
+  @Get('me/collection')
+  async collection(@CurrentUser('sub') userId: string) {
+    const user = await this.usersService.getOrThrow(userId);
+    return user.collection;
+  }
+
+  /** Historial de compras de créditos. */
+  @Get('me/credits/history')
+  creditHistory(@CurrentUser('sub') userId: string) {
+    return this.usersService.creditHistory(userId);
   }
 
   @Patch('me/avatar')
-  selectAvatar(
+  async selectAvatar(
     @CurrentUser('sub') userId: string,
     @Body() dto: SelectAvatarDto,
   ) {
-    return this.usersService.setAvatar(userId, dto.avatarId).then((u) => this.usersService.toResponse(u));
+    const user = await this.usersService.setAvatar(userId, dto.avatarId);
+    return this.usersService.toResponse(user);
   }
 
   @Post('me/avatars/purchase')
-  purchaseAvatar(
+  async purchaseAvatar(
     @CurrentUser('sub') userId: string,
     @Body() dto: PurchaseAvatarDto,
   ) {
-    return this.usersService.purchaseAvatarById(userId, dto.avatarId).then((u) => this.usersService.toResponse(u));
+    const user = await this.usersService.purchaseAvatarById(userId, dto.avatarId);
+    return this.usersService.toResponse(user);
   }
 
   @Patch('me/credits')

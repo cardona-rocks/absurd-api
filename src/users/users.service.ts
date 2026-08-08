@@ -1,34 +1,67 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { User, UserDocument } from './schemas/user.schema';
-import { CreditPurchase, CreditPurchaseDocument } from './schemas/credit-purchase.schema';
+import {
+  CreditPurchase,
+  CreditPurchaseDocument,
+} from './schemas/credit-purchase.schema';
 import { AvatarsService } from '../avatars/avatars.service';
+import { SIGNUP_CREDITS } from '../common/constants/game';
 
 export interface CreateUserDto {
   name: string;
   email: string;
   password?: string;
+  age?: number | null;
   googleId?: string;
   appleId?: string;
+  isGuest?: boolean;
+}
+
+export interface MatchResult {
+  result: 'win' | 'draw' | 'lose';
+  credits: number;
+  roundsWon: number;
+  roundsLost: number;
+  roundDraws: number;
+  perfect: boolean;
+}
+
+/** Día actual en UTC como YYYY-MM-DD. */
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function daysBetween(a: string, b: string): number {
+  const ms = Date.parse(b) - Date.parse(a);
+  return Math.round(ms / 86_400_000);
 }
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
-    @InjectModel(CreditPurchase.name) private creditPurchaseModel: Model<CreditPurchaseDocument>,
+    @InjectModel(CreditPurchase.name)
+    private creditPurchaseModel: Model<CreditPurchaseDocument>,
     private avatarsService: AvatarsService,
   ) {}
 
   async create(dto: CreateUserDto): Promise<UserDocument> {
     const user = new this.userModel({
       name: dto.name,
-      email: dto.email,
+      email: dto.email.toLowerCase(),
       password: dto.password,
-      credits: 10,
+      age: dto.age ?? null,
+      credits: SIGNUP_CREDITS,
       googleId: dto.googleId,
       appleId: dto.appleId,
+      isGuest: dto.isGuest ?? false,
     });
     return user.save();
   }
@@ -37,12 +70,13 @@ export class UsersService {
     if (!Types.ObjectId.isValid(id)) return null;
     return this.userModel
       .findById(id)
-      .populate('avatar', 'name price sprites')
+      .populate('avatar', 'name slug price rarity tagline ability sprites')
+      .populate('collection.avatar', 'name slug price rarity sprites')
       .exec();
   }
 
   async findByEmail(email: string): Promise<UserDocument | null> {
-    return this.userModel.findOne({ email }).exec();
+    return this.userModel.findOne({ email: email.toLowerCase() }).exec();
   }
 
   async findByGoogleId(googleId: string): Promise<UserDocument | null> {
@@ -73,22 +107,52 @@ export class UsersService {
     return obj;
   }
 
+  // ------------------------------------------------------------- créditos
+
   async updateCredits(userId: string, delta: number): Promise<UserDocument> {
     const user = await this.getOrThrow(userId);
     user.credits = Math.max(0, user.credits + delta);
     return user.save();
   }
 
+  async recordCreditPurchase(userId: string, amount: number): Promise<void> {
+    await this.creditPurchaseModel.create({ userId, amount });
+  }
+
+  async purchaseCredits(
+    userId: string,
+    amount: number,
+  ): Promise<{ credits: number }> {
+    await this.recordCreditPurchase(userId, amount);
+    const user = await this.updateCredits(userId, amount);
+    return { credits: user.credits };
+  }
+
+  async creditHistory(userId: string) {
+    return this.creditPurchaseModel
+      .find({ userId: new Types.ObjectId(userId) })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .exec();
+  }
+
+  // -------------------------------------------------------------- avatares
+
   async setAvatar(userId: string, avatarId: string): Promise<UserDocument> {
     const user = await this.getOrThrow(userId);
-    const inCollection = user.collection.some(
-      (c) => c.avatar.toString() === avatarId,
-    );
+    const inCollection = user.collection.some((c) => {
+      const id =
+        c.avatar instanceof Types.ObjectId
+          ? c.avatar.toString()
+          : (c.avatar as unknown as { _id: Types.ObjectId })?._id?.toString();
+      return id === avatarId;
+    });
     if (!inCollection) {
-      throw new NotFoundException('Avatar not in your collection');
+      throw new BadRequestException('Ese avatar no está en tu colección');
     }
-    user.avatar = new Types.ObjectId(avatarId) as any;
-    return user.save();
+    user.avatar = new Types.ObjectId(avatarId);
+    await user.save();
+    return this.getOrThrow(userId);
   }
 
   async addToCollection(
@@ -112,50 +176,88 @@ export class UsersService {
       .exec();
   }
 
-  async recordCreditPurchase(userId: string, amount: number): Promise<void> {
-    await this.creditPurchaseModel.create({ userId, amount });
-  }
-
-  async updateStats(
-    userId: string,
-    result: 'win' | 'draw' | 'lose',
-  ): Promise<void> {
-    const key = result === 'win' ? 'stats.wins' : result === 'draw' ? 'stats.draws' : 'stats.loses';
-    await this.userModel
-      .updateOne({ _id: userId }, { $inc: { [key]: 1 } })
-      .exec();
-  }
-
-  async purchaseCredits(userId: string, amount: number): Promise<{ credits: number }> {
-    await this.recordCreditPurchase(userId, amount);
-    const user = await this.updateCredits(userId, amount);
-    return { credits: user.credits };
-  }
-
-  async purchaseAvatar(
+  async purchaseAvatarById(
     userId: string,
     avatarId: string,
-    price: number,
   ): Promise<UserDocument> {
+    const avatar = await this.avatarsService.getOrThrow(avatarId);
     const user = await this.getOrThrow(userId);
-    if (user.credits < price) {
-      throw new NotFoundException('Insufficient credits');
-    }
-    const alreadyOwned = user.collection.some(
-      (c) => c.avatar.toString() === avatarId,
-    );
+
+    const alreadyOwned = user.collection.some((c) => {
+      const id =
+        c.avatar instanceof Types.ObjectId
+          ? c.avatar.toString()
+          : (c.avatar as unknown as { _id: Types.ObjectId })?._id?.toString();
+      return id === avatarId;
+    });
     if (alreadyOwned) {
-      throw new ConflictException('Avatar already in collection');
+      throw new ConflictException('Ya tienes ese avatar');
     }
-    user.credits -= price;
+    if (user.credits < avatar.price) {
+      throw new BadRequestException('No tienes créditos suficientes');
+    }
+
+    user.credits -= avatar.price;
+    // El primer avatar comprado se selecciona automáticamente.
+    if (!user.avatar) user.avatar = avatar._id as Types.ObjectId;
     await user.save();
-    await this.addToCollection(userId, avatarId, price);
+    await this.addToCollection(userId, avatarId, avatar.price);
     return this.getOrThrow(userId);
   }
 
-  async purchaseAvatarById(userId: string, avatarId: string): Promise<UserDocument> {
-    const avatar = await this.avatarsService.getOrThrow(avatarId);
-    return this.purchaseAvatar(userId, avatarId, avatar.price);
+  // ---------------------------------------------------------- estadísticas
+
+  /** Aplica el resultado de un combate: stats, créditos y racha de victorias. */
+  async applyMatchResult(userId: string, r: MatchResult): Promise<void> {
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) return;
+
+    const stats = user.stats;
+    if (r.result === 'win') stats.wins += 1;
+    else if (r.result === 'draw') stats.draws += 1;
+    else stats.loses += 1;
+
+    stats.matchesPlayed += 1;
+    stats.roundsWon += r.roundsWon;
+    stats.roundsLost += r.roundsLost;
+    stats.roundDraws += r.roundDraws;
+    if (r.perfect) stats.perfectWins += 1;
+    stats.creditsEarned += r.credits;
+
+    user.credits += r.credits;
+
+    if (r.result === 'win') {
+      user.streak.currentWins += 1;
+      user.streak.bestWins = Math.max(
+        user.streak.bestWins,
+        user.streak.currentWins,
+      );
+    } else if (r.result === 'lose') {
+      user.streak.currentWins = 0;
+    }
+
+    await user.save();
+  }
+
+  /** Marca la conexión de hoy y actualiza la racha de días seguidos. */
+  async touchLoginStreak(userId: string): Promise<void> {
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) return;
+
+    const day = today();
+    const last = user.streak.lastLoginDay;
+    if (last === day) return;
+
+    if (last && daysBetween(last, day) === 1) {
+      user.streak.currentLoginDays += 1;
+    } else {
+      user.streak.currentLoginDays = 1;
+    }
+    user.streak.bestLoginDays = Math.max(
+      user.streak.bestLoginDays,
+      user.streak.currentLoginDays,
+    );
+    user.streak.lastLoginDay = day;
+    await user.save();
   }
 }
-

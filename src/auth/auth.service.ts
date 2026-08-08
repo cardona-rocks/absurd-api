@@ -4,11 +4,22 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { UserDocument } from '../users/schemas/user.schema';
 import { UsersService } from '../users/users.service';
 import { SignUpDto } from './dto/sign-up.dto';
 import { LoginDto } from './dto/login.dto';
+
+/** Nombres de invitado, en tono absurdo. */
+const GUEST_NAMES = [
+  'Anónimo Furioso',
+  'Rival Misterioso',
+  'Don Nadie',
+  'Ente Indeciso',
+  'Sujeto Sospechoso',
+  'Fulano Absurdo',
+];
 
 @Injectable()
 export class AuthService {
@@ -17,61 +28,77 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async signUp(signUpDto: SignUpDto) {
-    const existing = await this.usersService.findByEmail(signUpDto.email);
-    if (existing) {
-      throw new ConflictException('Email already registered');
-    }
-    const hashedPassword = await bcrypt.hash(signUpDto.password, 10);
-    const user = await this.usersService.create({
-      name: signUpDto.name,
-      email: signUpDto.email,
-      password: hashedPassword,
-    });
-    const payload = { sub: user._id.toString(), email: user.email };
+  private async issue(user: UserDocument) {
+    await this.usersService.touchLoginStreak(user._id.toString());
+    const fresh = await this.usersService.getOrThrow(user._id.toString());
     return {
-      access_token: this.jwtService.sign(payload),
-      user: this.usersService.toResponse(user),
+      access_token: this.jwtService.sign({
+        sub: fresh._id.toString(),
+        email: fresh.email,
+      }),
+      user: this.usersService.toResponse(fresh),
     };
   }
 
-  async login(loginDto: LoginDto) {
-    const user = await this.usersService.findByEmail(loginDto.email);
+  async signUp(dto: SignUpDto) {
+    const existing = await this.usersService.findByEmail(dto.email);
+    if (existing) {
+      throw new ConflictException('Ese correo ya está registrado');
+    }
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const user = await this.usersService.create({
+      name: dto.name,
+      email: dto.email,
+      password: hashedPassword,
+      age: dto.age ?? null,
+    });
+    return this.issue(user);
+  }
+
+  async login(dto: LoginDto) {
+    const user = await this.usersService.findByEmail(dto.email);
     if (!user || !user.password) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Correo o contraseña incorrectos');
     }
-    const isMatch = await bcrypt.compare(loginDto.password, user.password);
+    const isMatch = await bcrypt.compare(dto.password, user.password);
     if (!isMatch) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Correo o contraseña incorrectos');
     }
-    const payload = { sub: user._id.toString(), email: user.email };
-    return {
-      access_token: this.jwtService.sign(payload),
-      user: this.usersService.toResponse(user),
-    };
+    return this.issue(user);
+  }
+
+  /** Cuenta desechable para probar el juego sin registrarse. */
+  async loginAsGuest() {
+    const suffix = randomBytes(4).toString('hex');
+    const name =
+      GUEST_NAMES[Math.floor(Math.random() * GUEST_NAMES.length)];
+    const user = await this.usersService.create({
+      name,
+      email: `guest-${suffix}@absurd.local`,
+      isGuest: true,
+    });
+    return this.issue(user);
   }
 
   async validateOAuthUser(
     provider: 'google' | 'apple',
     profile: { id: string; email: string; name?: string },
   ) {
-    const user =
+    const linked =
       provider === 'google'
         ? await this.usersService.findByGoogleId(profile.id)
         : await this.usersService.findByAppleId(profile.id);
+    if (linked) return linked;
 
-    if (user) {
-      return user;
-    }
-
-    let existing = await this.usersService.findByEmail(profile.email);
+    const existing = await this.usersService.findByEmail(profile.email);
     if (existing) {
+      const id = existing._id.toString();
       if (provider === 'google') {
-        await this.usersService.updateGoogleId(existing._id.toString(), profile.id);
+        await this.usersService.updateGoogleId(id, profile.id);
       } else {
-        await this.usersService.updateAppleId(existing._id.toString(), profile.id);
+        await this.usersService.updateAppleId(id, profile.id);
       }
-      return this.usersService.findById(existing._id.toString());
+      return this.usersService.findById(id);
     }
 
     return this.usersService.create({
@@ -84,7 +111,7 @@ export class AuthService {
   }
 
   async logout() {
-    return { message: 'Logged out successfully' };
+    return { message: 'Sesión cerrada' };
   }
 
   async getProfile(userId: string) {
@@ -92,10 +119,10 @@ export class AuthService {
     return this.usersService.toResponse(user);
   }
 
-  issueTokenAndUser(payload: { sub: string; email: string }, user: UserDocument) {
-    return {
-      access_token: this.jwtService.sign(payload),
-      user: this.usersService.toResponse(user),
-    };
+  async issueTokenAndUser(
+    _payload: { sub: string; email: string },
+    user: UserDocument,
+  ) {
+    return this.issue(user);
   }
 }
