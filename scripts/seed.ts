@@ -75,12 +75,25 @@ const damageSpriteSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const spriteImageSchema = new mongoose.Schema(
+  {
+    url: String,
+    filename: { type: String, default: '' },
+    order: { type: Number, default: 0 },
+    width: { type: Number, default: 0 },
+    height: { type: Number, default: 0 },
+    size: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
 const spritesSchema = new mongoose.Schema(
   {
-    profile: String,
-    base: { type: baseSpritesSchema, default: () => ({}) },
-    attack: { type: attackSpritesSchema, default: () => ({}) },
-    damage: [damageSpriteSchema],
+    front: { type: [spriteImageSchema], default: [] },
+    back: { type: [spriteImageSchema], default: [] },
+    default: { type: [spriteImageSchema], default: [] },
+    win: { type: [spriteImageSchema], default: [] },
+    lose: { type: [spriteImageSchema], default: [] },
   },
   { _id: false },
 );
@@ -98,14 +111,17 @@ const AvatarSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     slug: { type: String, required: true, unique: true, lowercase: true },
+    description: { type: String, default: '' },
     tagline: { type: String, default: '' },
     ability: { type: String, default: '' },
-    rarity: {
+    category: {
       type: String,
-      enum: ['comun', 'raro', 'epico', 'legendario'],
-      default: 'comun',
+      enum: ['Basic', 'Rare', 'Epic', 'Legendary', 'Hidden', 'Unique', 'Limited', 'Whalegrade'],
+      default: 'Basic',
     },
     order: { type: Number, default: 0 },
+    hidden: { type: Boolean, default: false },
+    retired: { type: Boolean, default: false },
     weapons: { type: weaponsSchema, default: () => ({}) },
     sprites: { type: spritesSchema, default: () => ({}) },
     stats: { type: avatarStatsSchema, default: () => ({}) },
@@ -123,7 +139,7 @@ interface SeedAvatar {
   name: string;
   tagline: string;
   ability: string;
-  rarity: 'comun' | 'raro' | 'epico' | 'legendario';
+  category: 'Basic' | 'Rare' | 'Epic' | 'Legendary' | 'Hidden' | 'Unique' | 'Limited' | 'Whalegrade';
   price: number;
   /** Textos de las tres armas: [piedra, papel, tijera]. */
   weapons: [string, string, string];
@@ -139,7 +155,7 @@ const AVATARS: SeedAvatar[] = [
     name: 'El Melenas',
     tagline: 'Rey de nada en particular.',
     ability: 'Melena Intimidante',
-    rarity: 'legendario',
+    category: 'Legendary',
     price: 0,
     weapons: ['Zarpazo', 'Melena Envolvente', 'Tijeras de Peluquería'],
   },
@@ -148,7 +164,7 @@ const AVATARS: SeedAvatar[] = [
     name: 'El Divorciado',
     tagline: 'Firmó los papeles y ahora firma victorias.',
     ability: 'Papeleo Infinito',
-    rarity: 'legendario',
+    category: 'Legendary',
     price: 0,
     weapons: ['Puño de Ejecutivo', 'Acta de Divorcio', 'Corta-Corbatas'],
   },
@@ -157,7 +173,7 @@ const AVATARS: SeedAvatar[] = [
     name: 'El Tostador',
     tagline: 'Nadie sabe cómo llegó aquí.',
     ability: 'Salto de Tostada',
-    rarity: 'comun',
+    category: 'Basic',
     price: 250,
     weapons: ['Golpe de Bandeja', 'Servilleta', 'Rebanadora'],
   },
@@ -166,7 +182,7 @@ const AVATARS: SeedAvatar[] = [
     name: 'Don Espinas',
     tagline: 'Abrazos no, gracias.',
     ability: 'Pinchazo Pasivo',
-    rarity: 'comun',
+    category: 'Basic',
     price: 250,
     weapons: ['Maceta', 'Hoja Seca', 'Espina Doble'],
   },
@@ -175,7 +191,7 @@ const AVATARS: SeedAvatar[] = [
     name: 'El Multitasker',
     tagline: 'Ocho brazos, cero organización.',
     ability: 'Ventosa Persistente',
-    rarity: 'raro',
+    category: 'Rare',
     price: 400,
     weapons: ['Puño Múltiple', 'Tinta Pegajosa', 'Pinza Naval'],
   },
@@ -184,7 +200,7 @@ const AVATARS: SeedAvatar[] = [
     name: 'El Sofá',
     tagline: 'Lleva tres años en la misma posición.',
     ability: 'Comodidad Aplastante',
-    rarity: 'raro',
+    category: 'Rare',
     price: 400,
     weapons: ['Cojinazo', 'Funda Extensible', 'Muelles Sueltos'],
   },
@@ -193,7 +209,7 @@ const AVATARS: SeedAvatar[] = [
     name: 'El Burócrata',
     tagline: 'Vuelva usted mañana.',
     ability: 'Trámite Eterno',
-    rarity: 'raro',
+    category: 'Rare',
     price: 500,
     weapons: ['Sellazo', 'Formulario 27-B', 'Guillotina de Papel'],
   },
@@ -202,7 +218,7 @@ const AVATARS: SeedAvatar[] = [
     name: 'El Mimo',
     tagline: 'Grita por dentro.',
     ability: 'Pared Invisible',
-    rarity: 'epico',
+    category: 'Epic',
     price: 700,
     weapons: ['Caja Invisible', 'Pañuelo Infinito', 'Tijeras Imaginarias'],
   },
@@ -211,7 +227,7 @@ const AVATARS: SeedAvatar[] = [
     name: 'La Ansiosa',
     tagline: 'Ya se arrepintió de su jugada.',
     ability: 'Duda Contagiosa',
-    rarity: 'epico',
+    category: 'Epic',
     price: 800,
     weapons: ['Picotazo Nervioso', 'Pluma Temblorosa', 'Pico Afilado'],
   },
@@ -220,7 +236,7 @@ const AVATARS: SeedAvatar[] = [
     name: 'El Notario',
     tagline: 'Todo lo tuyo es suyo, legalmente.',
     ability: 'Cláusula Oculta',
-    rarity: 'legendario',
+    category: 'Legendary',
     price: 1200,
     weapons: ['Mazo Notarial', 'Contrato Blindado', 'Cortapapeles de Oro'],
   },
@@ -245,7 +261,7 @@ async function run() {
       slug: a.slug,
       tagline: a.tagline,
       ability: a.ability,
-      rarity: a.rarity,
+      category: a.category,
       price: a.price,
       order: index,
       weapons: {

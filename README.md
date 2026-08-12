@@ -17,6 +17,26 @@ npm run start:dev
 
 `MONGODB_URI` es obligatoria — la app no arranca sin ella.
 
+### Panel de administración
+
+```bash
+# Primer administrador. Las credenciales salen del entorno, nunca del repo.
+ADMIN_EMAIL=tu@correo.com ADMIN_PASSWORD='una-contraseña-larga' npm run seed:admin
+
+# Si vienes de una base de datos anterior al panel:
+npm run migrate:avatars -- --dry   # enseña qué cambiaría
+npm run migrate:avatars            # aplica
+```
+
+La cuenta nace con `mustChangePassword`, así que el panel obliga a cambiar la
+contraseña en el primer acceso.
+
+### Imágenes
+
+Los sprites se guardan en disco, en `UPLOADS_DIR` (por defecto `./uploads`) y se
+sirven en `/uploads/*`. **En Railway hay que montar un volumen persistente** y
+apuntar `UPLOADS_DIR` a su ruta; sin volumen, cada despliegue borra lo subido.
+
 > **Seguridad:** el repositorio tenía una cadena de conexión de Atlas con
 > usuario y contraseña reales en `.env.example`, `scripts/seed.ts`,
 > `src/app.module.ts` e `Instructions.txt`. Se quitó de los tres primeros.
@@ -33,6 +53,7 @@ públicas. El token sale de `/auth/signup`, `/auth/login` o `/auth/guest`.
 | POST | `/auth/login` | sí | Login con correo y contraseña. |
 | POST | `/auth/guest` | sí | Cuenta desechable para probar sin registrarse. |
 | POST | `/auth/logout` | no | Cierra sesión (el cliente descarta el token). |
+| POST | `/auth/change-password` | no | `{ currentPassword, newPassword }`. |
 | GET | `/auth/me` | no | Perfil del usuario autenticado. |
 | GET | `/auth/google` | sí | Inicia OAuth de Google (si está configurado). |
 | GET | `/auth/google/callback` | sí | Callback de Google. |
@@ -60,8 +81,49 @@ El primer avatar comprado se selecciona automáticamente.
 | GET | `/avatars` | Catálogo completo. |
 | GET | `/avatars/:id` | Un avatar. |
 
-Cada avatar tiene `slug`, `name`, `tagline`, `ability`, `rarity`
-(`comun` \| `raro` \| `epico` \| `legendario`), `price`, `weapons` y `sprites`.
+Cada avatar tiene `slug`, `name`, `description`, `tagline`, `ability`, `price`,
+`weapons`, `sprites` y `category`, que puede ser `Basic`, `Rare`, `Epic`,
+`Legendary`, `Hidden`, `Unique`, `Limited` o `Whalegrade`.
+
+`GET /avatars` no devuelve los ocultos. Los retirados sí se listan, para que
+quien ya los tenga los vea en su colección, pero no se pueden comprar.
+
+Los `sprites` son cinco listas de imágenes — `front`, `back`, `default`, `win`
+y `lose` — donde el orden marca los fotogramas de la animación. `front` y `back`
+son obligatorias en cuanto el avatar deja de estar oculto.
+
+## Administración
+
+Todo cuelga de `/admin` y exige rol `moderator` como mínimo. Las marcadas con
+**admin** requieren rol `admin`.
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/admin/bootstrap` | Perfil del staff, categorías y tipos de sprite. |
+| GET | `/admin/stats` | Cifras de cabecera del panel. |
+| GET | `/admin/stats/timeline?days=14` | Combates por día. |
+| GET | `/admin/stats/top-avatars` | Avatares más comprados. |
+| GET | `/admin/avatars` | Listado con búsqueda, filtro y paginación. |
+| POST | `/admin/avatars` | Crea un avatar. |
+| PATCH | `/admin/avatars/:id` | Edita un avatar. |
+| DELETE | `/admin/avatars/:id` | **admin** · Falla si algún jugador lo tiene. |
+| POST | `/admin/avatars/:id/sprites/:type` | Sube imágenes (campo `files`). |
+| DELETE | `/admin/avatars/:id/sprites/:type/:filename` | Borra una imagen. |
+| PATCH | `/admin/avatars/:id/sprites/:type/order` | `{ filenames }` reordena. |
+| GET | `/admin/users` | Búsqueda y filtros por rol y estado. |
+| GET | `/admin/users/:id` | Ficha completa. |
+| PATCH | `/admin/users/:id/ban` | `{ banned, reason? }`. |
+| PATCH | `/admin/users/:id/role` | **admin** · `{ role }`. |
+| PATCH | `/admin/users/:id/credits` | `{ amount, reason? }`, positivo o negativo. |
+| POST | `/admin/users/:id/avatars` | `{ avatarId }` regala un avatar. |
+| PATCH | `/admin/users/:id/note` | Nota interna del equipo. |
+| POST | `/admin/users/:id/reset-password` | **admin** · Devuelve una temporal. |
+| GET | `/admin/audit` | Historial de acciones del panel. |
+
+Salvaguardas: nadie puede banearse ni cambiarse el rol a sí mismo, no se puede
+dejar el sistema sin administradores, y un moderador no puede moderar a otro
+miembro del equipo. Un baneo corta el acceso al instante, sin esperar a que
+caduque el token.
 
 ## Combates
 

@@ -1,11 +1,17 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import {
+  UPLOADS_ROOT,
+  UPLOADS_PUBLIC_PATH,
+  ensureUploadDirs,
+} from './uploads/uploads.config';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -15,6 +21,15 @@ async function bootstrap() {
     }),
   );
   app.enableCors();
+
+  // Las imágenes subidas se sirven como estáticos desde el volumen.
+  ensureUploadDirs();
+  app.useStaticAssets(UPLOADS_ROOT, {
+    prefix: UPLOADS_PUBLIC_PATH,
+    maxAge: '7d',
+    fallthrough: false,
+  });
+  logger.log(`Sirviendo ${UPLOADS_PUBLIC_PATH} desde ${UPLOADS_ROOT}`);
 
   const port = Number(process.env.PORT ?? 3000);
   // Railway y similares enrutan al contenedor, hay que escuchar en todas las

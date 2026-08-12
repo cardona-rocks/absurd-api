@@ -1,50 +1,56 @@
 import { Prop, Schema } from '@nestjs/mongoose';
-import { AttackWeaponSchema } from './attack-weapon.schema';
 
+/**
+ * Un fotograma de sprite. Cada tipo admite varias imágenes para poder animar;
+ * el orden lo marca `order`.
+ */
 @Schema({ _id: false })
-export class AttackSpritesSchema {
-  @Prop({ type: AttackWeaponSchema, default: () => ({}) })
-  rock: AttackWeaponSchema;
+export class SpriteImageSchema {
+  /** Ruta pública servida por la API, p. ej. /uploads/avatars/abc.png */
+  @Prop({ required: true })
+  url: string;
 
-  @Prop({ type: AttackWeaponSchema, default: () => ({}) })
-  paper: AttackWeaponSchema;
-
-  @Prop({ type: AttackWeaponSchema, default: () => ({}) })
-  scissors: AttackWeaponSchema;
-}
-
-@Schema({ _id: false })
-export class BaseSpritesSchema {
-  @Prop({ type: [String], default: [] })
-  backView: string[];
-
-  @Prop({ type: [String], default: [] })
-  frontView: string[];
-}
-
-@Schema({ _id: false })
-export class DamageSpriteSchema {
+  /** Nombre del fichero en disco, necesario para poder borrarlo. */
   @Prop({ default: '' })
-  id: string;
+  filename: string;
 
-  @Prop({ default: '' })
-  image: string;
+  @Prop({ default: 0 })
+  order: number;
 
-  @Prop({ type: Object, default: {} })
-  settings: Record<string, unknown>;
+  @Prop({ default: 0 })
+  width: number;
+
+  @Prop({ default: 0 })
+  height: number;
+
+  @Prop({ default: 0 })
+  size: number;
+
+  @Prop({ default: () => new Date() })
+  uploadedAt: Date;
 }
 
+/**
+ * Juegos de sprites por estado. `front` y `back` son obligatorios para poder
+ * dibujar el combate; el resto son opcionales.
+ */
 @Schema({ _id: false })
 export class SpritesSchema {
-  @Prop({ default: '' })
-  profile: string;
+  /** De frente: el rival en la esquina superior. */
+  @Prop({ type: [SpriteImageSchema], default: [] })
+  front: SpriteImageSchema[];
 
-  @Prop({ type: BaseSpritesSchema, default: () => ({}) })
-  base: BaseSpritesSchema;
+  /** De espaldas: tu personaje en la esquina inferior. */
+  @Prop({ type: [SpriteImageSchema], default: [] })
+  back: SpriteImageSchema[];
 
-  @Prop({ type: AttackSpritesSchema, default: () => ({}) })
-  attack: AttackSpritesSchema;
+  /** Reposo, usado en tarjetas y menús. */
+  @Prop({ type: [SpriteImageSchema], default: [] })
+  default: SpriteImageSchema[];
 
-  @Prop({ type: [DamageSpriteSchema], default: [] })
-  damage: DamageSpriteSchema[];
+  @Prop({ type: [SpriteImageSchema], default: [] })
+  win: SpriteImageSchema[];
+
+  @Prop({ type: [SpriteImageSchema], default: [] })
+  lose: SpriteImageSchema[];
 }

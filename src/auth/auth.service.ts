@@ -1,5 +1,6 @@
 import {
   Injectable,
+  BadRequestException,
   ConflictException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -108,6 +109,34 @@ export class AuthService {
         ? { googleId: profile.id }
         : { appleId: profile.id }),
     });
+  }
+
+  /**
+   * Cambia la contraseña del usuario autenticado y levanta el aviso de cambio
+   * obligatorio. Lo usa el panel tras el primer acceso del admin sembrado.
+   */
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const user = await this.usersService.getWithPassword(userId);
+    if (!user?.password) {
+      throw new BadRequestException('Esta cuenta no tiene contraseña');
+    }
+    const matches = await bcrypt.compare(currentPassword, user.password);
+    if (!matches) {
+      throw new UnauthorizedException('La contraseña actual no es correcta');
+    }
+    if (currentPassword === newPassword) {
+      throw new BadRequestException('La nueva contraseña debe ser distinta');
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.mustChangePassword = false;
+    await user.save();
+
+    return { message: 'Contraseña actualizada' };
   }
 
   async logout() {

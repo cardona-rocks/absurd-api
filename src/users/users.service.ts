@@ -79,6 +79,15 @@ export class UsersService {
     return this.userModel.findOne({ email: email.toLowerCase() }).exec();
   }
 
+  /**
+   * Documento con el hash de contraseña incluido, para comparar o cambiarla.
+   * El resto de consultas lo omiten al serializar con `toResponse`.
+   */
+  async getWithPassword(id: string): Promise<UserDocument | null> {
+    if (!Types.ObjectId.isValid(id)) return null;
+    return this.userModel.findById(id).exec();
+  }
+
   async findByGoogleId(googleId: string): Promise<UserDocument | null> {
     return this.userModel.findOne({ googleId }).exec();
   }
@@ -182,6 +191,11 @@ export class UsersService {
   ): Promise<UserDocument> {
     const avatar = await this.avatarsService.getOrThrow(avatarId);
     const user = await this.getOrThrow(userId);
+
+    // Los ocultos y los retirados no se venden, aunque se sepa el id.
+    if (avatar.hidden || avatar.retired) {
+      throw new BadRequestException('Ese avatar no está a la venta');
+    }
 
     const alreadyOwned = user.collection.some((c) => {
       const id =

@@ -9,13 +9,23 @@ export class AvatarsService {
     @InjectModel(Avatar.name) private avatarModel: Model<AvatarDocument>,
   ) {}
 
+  /**
+   * Catálogo visible para los jugadores.
+   *
+   * Los ocultos no se listan nunca. Los retirados sí, porque quien ya los tiene
+   * debe poder verlos en su colección; la compra se bloquea aparte.
+   */
   async findAll(): Promise<AvatarDocument[]> {
-    return this.avatarModel.find().exec();
+    return this.avatarModel.find({ hidden: false }).sort({ order: 1 }).exec();
   }
 
   async findById(id: string): Promise<AvatarDocument | null> {
     if (!Types.ObjectId.isValid(id)) return null;
     return this.avatarModel.findById(id).exec();
+  }
+
+  async findBySlug(slug: string): Promise<AvatarDocument | null> {
+    return this.avatarModel.findOne({ slug: slug.toLowerCase() }).exec();
   }
 
   async getOrThrow(id: string): Promise<AvatarDocument> {

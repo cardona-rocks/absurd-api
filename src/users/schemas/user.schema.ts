@@ -6,6 +6,8 @@ import { PowerUpItemSchema } from './powerup-item.schema';
 import { AchievementProgressSchema } from './achievement-progress.schema';
 import { StreakSchema } from './streak.schema';
 import { SIGNUP_CREDITS } from '../../common/constants/game';
+import { ROLES } from '../../common/constants/roles';
+import type { Role } from '../../common/constants/roles';
 
 export type UserDocument = User & Document;
 
@@ -30,6 +32,34 @@ export class User {
   @Prop({ type: Number, default: null, min: 1, max: 120 })
   age: number | null;
 
+  /** Rol. Solo `moderator` y `admin` entran al panel. */
+  @Prop({ enum: ROLES, default: 'player' })
+  role: Role;
+
+  /** Obliga a cambiar la contraseña en el primer acceso. */
+  @Prop({ default: false })
+  mustChangePassword: boolean;
+
+  // --------------------------------------------------------- moderación
+
+  @Prop({ default: false })
+  banned: boolean;
+
+  @Prop({ type: String, default: null })
+  bannedReason: string | null;
+
+  @Prop({ type: Date, default: null })
+  bannedAt: Date | null;
+
+  @Prop({ type: Types.ObjectId, ref: 'User', default: null })
+  bannedBy: Types.ObjectId | null;
+
+  /** Nota interna del equipo, nunca se expone al jugador. */
+  @Prop({ type: String, default: '' })
+  moderationNote: string;
+
+  // ------------------------------------------------------------- juego
+
   @Prop({ default: SIGNUP_CREDITS })
   credits: number;
 
@@ -42,11 +72,9 @@ export class User {
   @Prop({ type: [CollectionItemSchema], default: [] })
   collection: CollectionItemSchema[];
 
-  /** Inventario de power ups comprados. */
   @Prop({ type: [PowerUpItemSchema], default: [] })
   powerUps: PowerUpItemSchema[];
 
-  /** Progreso de logros. */
   @Prop({ type: [AchievementProgressSchema], default: [] })
   achievements: AchievementProgressSchema[];
 
@@ -70,3 +98,7 @@ export const UserSchema = SchemaFactory.createForClass(User);
 UserSchema.index({ 'stats.wins': -1, 'stats.loses': 1 });
 UserSchema.index({ googleId: 1 }, { sparse: true });
 UserSchema.index({ appleId: 1 }, { sparse: true });
+UserSchema.index({ role: 1 });
+UserSchema.index({ banned: 1 });
+// Búsqueda del panel por nombre o correo.
+UserSchema.index({ name: 'text', email: 'text' });
