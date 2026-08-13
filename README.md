@@ -45,19 +45,24 @@ apuntar `UPLOADS_DIR` a su ruta; sin volumen, cada despliegue borra lo subido.
 ## Autenticación
 
 Todas las rutas exigen `Authorization: Bearer <token>` salvo las marcadas como
-públicas. El token sale de `/auth/signup`, `/auth/login` o `/auth/guest`.
+públicas. El token sale de `/auth/signup`, `/auth/login`, `/auth/guest` o
+`/auth/apple`.
+
+Sign in with Apple: pon `APPLE_CLIENT_ID` (el bundle id de iOS; en Expo Go
+también `host.exp.Exponent`) y activa la capability en el App ID de Apple. La
+app nativa manda el identity token a `POST /auth/apple`.
 
 | Método | Ruta | Público | Descripción |
 |---|---|---|---|
 | POST | `/auth/signup` | sí | Registro con `name`, `email`, `password`, `age` opcional. Regala 600 créditos. |
 | POST | `/auth/login` | sí | Login con correo y contraseña. |
 | POST | `/auth/guest` | sí | Cuenta desechable para probar sin registrarse. |
+| POST | `/auth/apple` | sí | Sign in with Apple. `{ identityToken, nonce, fullName? }`. Requiere `APPLE_CLIENT_ID`. |
 | POST | `/auth/logout` | no | Cierra sesión (el cliente descarta el token). |
 | POST | `/auth/change-password` | no | `{ currentPassword, newPassword }`. |
 | GET | `/auth/me` | no | Perfil del usuario autenticado. |
 | GET | `/auth/google` | sí | Inicia OAuth de Google (si está configurado). |
 | GET | `/auth/google/callback` | sí | Callback de Google. |
-| GET | `/auth/apple` | sí | Sin implementar todavía. |
 
 Al iniciar sesión se actualiza la racha de días seguidos conectado.
 

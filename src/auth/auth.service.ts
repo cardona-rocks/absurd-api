@@ -83,7 +83,7 @@ export class AuthService {
 
   async validateOAuthUser(
     provider: 'google' | 'apple',
-    profile: { id: string; email: string; name?: string },
+    profile: { id: string; email?: string; name?: string },
   ) {
     const linked =
       provider === 'google'
@@ -91,24 +91,46 @@ export class AuthService {
         : await this.usersService.findByAppleId(profile.id);
     if (linked) return linked;
 
-    const existing = await this.usersService.findByEmail(profile.email);
-    if (existing) {
-      const id = existing._id.toString();
-      if (provider === 'google') {
-        await this.usersService.updateGoogleId(id, profile.id);
-      } else {
-        await this.usersService.updateAppleId(id, profile.id);
+    if (profile.email) {
+      const existing = await this.usersService.findByEmail(profile.email);
+      if (existing) {
+        const id = existing._id.toString();
+        if (provider === 'google') {
+          await this.usersService.updateGoogleId(id, profile.id);
+        } else {
+          await this.usersService.updateAppleId(id, profile.id);
+        }
+        return this.usersService.findById(id);
       }
-      return this.usersService.findById(id);
     }
 
+    const email =
+      profile.email ?? `${provider}-${profile.id}@absurd.local`;
+    const fallbackName = email.split('@')[0] || 'Jugador';
+    const name = (profile.name?.trim() || fallbackName).slice(0, 24);
+
     return this.usersService.create({
-      name: profile.name ?? profile.email.split('@')[0],
-      email: profile.email,
+      name,
+      email,
       ...(provider === 'google'
         ? { googleId: profile.id }
         : { appleId: profile.id }),
     });
+  }
+
+  /** Login nativo: el identity token ya viene verificado. */
+  async loginWithApple(profile: {
+    id: string;
+    email?: string;
+    name?: string;
+  }) {
+    const user = await this.validateOAuthUser('apple', profile);
+    if (!user) {
+      throw new UnauthorizedException(
+        'No pudimos validar tu cuenta de Apple',
+      );
+    }
+    return this.issue(user);
   }
 
   /**

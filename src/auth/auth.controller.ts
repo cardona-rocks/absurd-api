@@ -1,18 +1,24 @@
-import { Controller, Post, Body, Get, UseGuards, Req, NotImplementedException } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
+import { AppleTokenService } from './apple-token.service';
 import { SignUpDto } from './dto/sign-up.dto';
 import { LoginDto } from './dto/login.dto';
+import { AppleSignInDto } from './dto/apple-signin.dto';
 import { ChangePasswordDto } from '../admin/dto/moderation.dto';
 import { Public } from '../common/decorators/public.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { GoogleEnabledGuard } from './guards/google-enabled.guard';
+import { AppleEnabledGuard } from './guards/apple-enabled.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../common/decorators/current-user.decorator';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly appleTokenService: AppleTokenService,
+  ) {}
 
   @Public()
   @Post('signup')
@@ -75,15 +81,16 @@ export class AuthController {
     return this.authService.issueTokenAndUser(payload, user!);
   }
 
+  /** Sign in with Apple nativo: la app manda el identity token. */
   @Public()
-  @Get('apple')
-  appleAuth() {
-    throw new NotImplementedException('Apple Sign In not configured. Set APPLE_* env vars and add strategy.');
-  }
-
-  @Public()
-  @Get('apple/callback')
-  appleAuthCallback() {
-    throw new NotImplementedException('Apple Sign In not configured.');
+  @Post('apple')
+  @UseGuards(AppleEnabledGuard)
+  async appleAuth(@Body() dto: AppleSignInDto) {
+    const profile = await this.appleTokenService.verify(
+      dto.identityToken,
+      dto.nonce,
+      dto.fullName,
+    );
+    return this.authService.loginWithApple(profile);
   }
 }

@@ -8,6 +8,8 @@ import { UsersModule } from '../users/users.module';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { GoogleEnabledGuard } from './guards/google-enabled.guard';
+import { AppleEnabledGuard } from './guards/apple-enabled.guard';
+import { AppleTokenService } from './apple-token.service';
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { GoogleEnabledGuard } from './guards/google-enabled.guard';
     AuthService,
     JwtStrategy,
     GoogleEnabledGuard,
+    AppleEnabledGuard,
+    AppleTokenService,
     ...(process.env.GOOGLE_CLIENT_ID?.trim() ? [GoogleStrategy] : []),
   ],
   exports: [AuthService],
