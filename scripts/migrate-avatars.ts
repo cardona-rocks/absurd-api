@@ -5,6 +5,9 @@
  *   npm run migrate:avatars -- --dry  # solo enseña lo que haría
  *
  * Qué hace:
+ *  0. Rellena `slug` en los avatares que no lo tengan (los creados antes de que
+ *     el campo existiera). Sin él, cualquier guardado falla con
+ *     "Path `slug` is required".
  *  1. `rarity` (comun/raro/epico/legendario) pasa a `category` (Basic/Rare/…).
  *  2. Los sprites antiguos (profile, base.frontView, base.backView) pasan a la
  *     nueva estructura front/back/default como listas de imágenes.
@@ -14,6 +17,7 @@
  */
 import * as mongoose from 'mongoose';
 import * as dotenv from 'dotenv';
+import { uniqueSlug } from '../src/common/slug';
 
 dotenv.config();
 
@@ -76,6 +80,26 @@ async function run() {
   const collection = instance.connection.collection('avatars');
   const docs = (await collection.find({}).toArray()) as unknown as LegacyAvatar[];
 
+  // --- Paso 0: slugs que faltan -------------------------------------------
+  const taken = new Set(
+    docs
+      .map((d) => d.slug)
+      .filter((s): s is string => typeof s === 'string' && s.length > 0),
+  );
+  const sinSlug = docs.filter((d) => !d.slug);
+
+  for (const doc of sinSlug) {
+    const slug = uniqueSlug(doc.name ?? '', taken);
+    console.log(`slug: "${doc.name ?? doc._id.toString()}" → "${slug}"`);
+    if (!DRY_RUN) {
+      await collection.updateOne({ _id: doc._id }, { $set: { slug } });
+    }
+    doc.slug = slug;
+  }
+  if (sinSlug.length) {
+    console.log(`${sinSlug.length} slug(s) asignados.\n`);
+  }
+
   let migrated = 0;
   let skipped = 0;
 
@@ -118,7 +142,8 @@ async function run() {
   }
 
   console.log(
-    `\n${migrated} avatar(es) migrados, ${skipped} ya estaban al día.` +
+    `\n${migrated} avatar(es) migrados, ${skipped} ya estaban al día, ` +
+      `${sinSlug.length} slug(s) rellenados.` +
       (DRY_RUN ? ' Nada se ha escrito (--dry).' : ''),
   );
 

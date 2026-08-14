@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -18,6 +19,7 @@ import {
 } from '../common/constants/catalog';
 import type { SpriteType } from '../common/constants/catalog';
 import { CreateAvatarDto, UpdateAvatarDto } from './dto/avatar.dto';
+import { uniqueSlug } from '../common/slug';
 
 interface Actor {
   id: string;
@@ -26,6 +28,8 @@ interface Actor {
 
 @Injectable()
 export class AdminAvatarsService {
+  private readonly logger = new Logger(AdminAvatarsService.name);
+
   constructor(
     @InjectModel(Avatar.name) private avatarModel: Model<AvatarDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
@@ -126,6 +130,33 @@ export class AdminAvatarsService {
     }
   }
 
+  /**
+   * Garantiza que el avatar tiene slug antes de guardarlo.
+   *
+   * Los avatares creados antes de que existiera el campo no lo tienen, y el
+   * esquema lo exige: sin esto, subir una imagen a uno de ellos falla con
+   * "Path `slug` is required". Lo correcto es pasar `npm run migrate:avatars`,
+   * pero aquí se rellena igualmente para no bloquear al administrador.
+   */
+  private async ensureSlug(avatar: AvatarDocument): Promise<void> {
+    if (avatar.slug) return;
+
+    const others = await this.avatarModel
+      .find({ slug: { $exists: true, $ne: null } })
+      .select('slug')
+      .lean()
+      .exec();
+    const taken = new Set(
+      others.map((o) => o.slug).filter((x): x is string => Boolean(x)),
+    );
+
+    avatar.slug = uniqueSlug(avatar.name ?? '', taken);
+    this.logger.warn(
+      `El avatar ${avatar._id.toString()} no tenía slug; se le asignó "${avatar.slug}". ` +
+        'Pasa `npm run migrate:avatars` para arreglar los demás.',
+    );
+  }
+
   async get(id: string): Promise<AvatarDocument> {
     if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Avatar not found');
     const avatar = await this.avatarModel.findById(id).exec();
@@ -190,6 +221,7 @@ export class AdminAvatarsService {
     // Si está visible en tienda tiene que poder dibujarse.
     if (!avatar.hidden) this.assertPublishable(avatar);
 
+    await this.ensureSlug(avatar);
     await avatar.save();
 
     await this.audit.record({
@@ -236,6 +268,7 @@ export class AdminAvatarsService {
       })),
     ] as never;
 
+    await this.ensureSlug(avatar);
     await avatar.save();
 
     await this.audit.record({
@@ -279,6 +312,7 @@ export class AdminAvatarsService {
       ...s,
       order: i,
     })) as never;
+    await this.ensureSlug(avatar);
     await avatar.save();
     await this.uploads.removeByFilename(filename);
 
@@ -316,6 +350,7 @@ export class AdminAvatarsService {
     }
 
     avatar.sprites[type] = ordered.map((s, i) => ({ ...s, order: i })) as never;
+    await this.ensureSlug(avatar);
     await avatar.save();
     return avatar;
   }
