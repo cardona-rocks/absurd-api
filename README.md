@@ -33,9 +33,39 @@ contraseña en el primer acceso.
 
 ### Imágenes
 
-Los sprites se guardan en disco, en `UPLOADS_DIR` (por defecto `./uploads`) y se
-sirven en `/uploads/*`. **En Railway hay que montar un volumen persistente** y
-apuntar `UPLOADS_DIR` a su ruta; sin volumen, cada despliegue borra lo subido.
+Los sprites van a un **bucket compatible con S3** (el de Railway). Basta con
+definir estas cuatro variables en el servicio de la API:
+
+```
+S3_ENDPOINT=https://t3.storageapi.dev
+S3_BUCKET=<nombre-del-bucket>
+S3_ACCESS_KEY_ID=<clave>
+S3_SECRET_ACCESS_KEY=<secreto>
+S3_REGION=auto            # opcional, 'auto' por defecto
+```
+
+Si falta alguna, la API cae automáticamente a disco (`UPLOADS_DIR`, por defecto
+`./uploads`), que sirve para desarrollo pero es **efímero** en un contenedor.
+
+No hace falta volumen ni ninguna dependencia extra: la firma AWS Signature V4 se
+hace con `node:crypto` en `src/uploads/s3-client.ts`, comprobada contra los
+vectores de prueba oficiales de AWS.
+
+**Las imágenes se sirven siempre desde la API**, en
+`/uploads/avatars/<fichero>`, y es esa ruta la que se guarda en la base de
+datos. Así funciona igual con buckets privados, y cambiar de proveedor (o volver
+a disco) no obliga a migrar nada de lo ya guardado.
+
+Para comprobar el estado, con sesión de administrador:
+
+```
+GET /admin/uploads/status
+```
+
+Hace una escritura y un borrado de prueba reales, e informa de si está usando
+bucket o disco, si se puede escribir y si sobrevive a un despliegue. La API
+repite esa comprobación al arrancar y la deja en el log, así que un problema de
+credenciales se ve nada más desplegar y no al subir la primera imagen.
 
 > **Seguridad:** el repositorio tenía una cadena de conexión de Atlas con
 > usuario y contraseña reales en `.env.example`, `scripts/seed.ts`,

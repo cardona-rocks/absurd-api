@@ -34,6 +34,7 @@ import {
 import { CATEGORIES, SPRITE_TYPES } from '../common/constants/catalog';
 import type { SpriteType } from '../common/constants/catalog';
 import type { UploadedFile } from '../uploads/uploads.service';
+import { StorageService } from '../uploads/storage.service';
 
 /**
  * Panel de administración. Todo cuelga de /admin y exige rol de moderador como
@@ -49,6 +50,7 @@ export class AdminController {
     private stats: AdminStatsService,
     private audit: AuditService,
     private usersService: UsersService,
+    private storage: StorageService,
   ) {}
 
   /** Datos que el panel necesita al arrancar. */
@@ -65,6 +67,23 @@ export class AdminController {
       },
       categories: CATEGORIES,
       spriteTypes: SPRITE_TYPES,
+    };
+  }
+
+  /**
+   * Diagnóstico del almacenamiento de imágenes. Sirve para saber de un vistazo
+   * si las subidas van a funcionar antes de intentarlas.
+   */
+  @Get('uploads/status')
+  async uploadsStatus() {
+    const status = await this.storage.describe();
+    return {
+      ...status,
+      hint: !status.writable
+        ? 'Las subidas fallarán. Revisa las variables S3_* (o UPLOADS_DIR si usas disco).'
+        : status.persistent
+          ? 'Listo y persistente.'
+          : 'Funciona, pero en disco efímero: cada despliegue borra las imágenes. Configura las variables S3_*.',
     };
   }
 

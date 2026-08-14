@@ -103,6 +103,29 @@ export class AdminAvatarsService {
     return new Map(rows.map((r) => [r._id.toString(), r.n]));
   }
 
+  /**
+   * Comprueba que el tipo de sprite existe y deja el contenedor listo.
+   *
+   * Sin esto, un tipo mal escrito escribiría en una propiedad inexistente, y un
+   * avatar antiguo sin el objeto `sprites` reventaba con un 500 al asignarle.
+   */
+  private spriteBucket(avatar: AvatarDocument, type: SpriteType): void {
+    if (!SPRITE_TYPES.includes(type)) {
+      throw new BadRequestException(
+        `Tipo de sprite desconocido: "${type}". Usa uno de: ${SPRITE_TYPES.join(', ')}.`,
+      );
+    }
+    if (!avatar.sprites) {
+      avatar.sprites = {
+        front: [],
+        back: [],
+        default: [],
+        win: [],
+        lose: [],
+      } as never;
+    }
+  }
+
   async get(id: string): Promise<AvatarDocument> {
     if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Avatar not found');
     const avatar = await this.avatarModel.findById(id).exec();
@@ -199,6 +222,7 @@ export class AdminAvatarsService {
     actor: Actor,
   ): Promise<AvatarDocument> {
     const avatar = await this.get(id);
+    this.spriteBucket(avatar, type);
     const stored = await this.uploads.register(files);
 
     const current = avatar.sprites[type] ?? [];
@@ -235,6 +259,7 @@ export class AdminAvatarsService {
     actor: Actor,
   ): Promise<AvatarDocument> {
     const avatar = await this.get(id);
+    this.spriteBucket(avatar, type);
     const current = avatar.sprites[type] ?? [];
     const target = current.find((s) => s.filename === filename);
     if (!target) throw new NotFoundException('Esa imagen no está en el avatar');
@@ -277,6 +302,7 @@ export class AdminAvatarsService {
     filenames: string[],
   ): Promise<AvatarDocument> {
     const avatar = await this.get(id);
+    this.spriteBucket(avatar, type);
     const current = avatar.sprites[type] ?? [];
     const byName = new Map(current.map((s) => [s.filename, s]));
 

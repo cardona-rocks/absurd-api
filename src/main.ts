@@ -2,11 +2,8 @@ import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
-import {
-  UPLOADS_ROOT,
-  UPLOADS_PUBLIC_PATH,
-  ensureUploadDirs,
-} from './uploads/uploads.config';
+import { MongoExceptionFilter } from './common/filters/mongo-exception.filter';
+import { StorageService } from './uploads/storage.service';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -22,14 +19,28 @@ async function bootstrap() {
   );
   app.enableCors();
 
-  // Las imágenes subidas se sirven como estáticos desde el volumen.
-  ensureUploadDirs();
-  app.useStaticAssets(UPLOADS_ROOT, {
-    prefix: UPLOADS_PUBLIC_PATH,
-    maxAge: '7d',
-    fallthrough: false,
-  });
-  logger.log(`Sirviendo ${UPLOADS_PUBLIC_PATH} desde ${UPLOADS_ROOT}`);
+  // Traduce errores de Mongoose y de disco a respuestas legibles en vez de
+  // dejar un "Internal server error" sin explicación.
+  app.useGlobalFilters(new MongoExceptionFilter());
+
+  // Los sprites los sirve UploadsController, que lee del bucket o del disco
+  // según toque; por eso aquí no se registran estáticos.
+
+  // Comprobación real de escritura al arrancar: mejor enterarse ahora que con
+  // un 500 al subir la primera imagen.
+  const storage = app.get(StorageService);
+  const status = await storage.describe();
+  if (status.writable) {
+    logger.log(
+      `Imágenes: ${status.backend} en ${status.location}` +
+        (status.persistent ? '' : ' (efímero: un despliegue nuevo las borra)'),
+    );
+  } else {
+    logger.error(
+      `No se puede escribir en ${status.location}: ${status.error}. ` +
+        'Las subidas van a fallar. Revisa las variables S3_* o UPLOADS_DIR.',
+    );
+  }
 
   const port = Number(process.env.PORT ?? 3000);
   // Railway y similares enrutan al contenedor, hay que escuchar en todas las
