@@ -18,7 +18,7 @@ import { BASE_HEARTS } from '../common/constants/game';
 const POPULATE = [
   { path: 'createdBy', select: 'name' },
   { path: 'entrants.userId', select: 'name stats' },
-  { path: 'entrants.avatarId', select: 'name slug rarity sprites' },
+  { path: 'entrants.avatarId', select: 'name slug category sprites' },
   { path: 'bracket.player1', select: 'name' },
   { path: 'bracket.player2', select: 'name' },
   { path: 'bracket.winner', select: 'name' },

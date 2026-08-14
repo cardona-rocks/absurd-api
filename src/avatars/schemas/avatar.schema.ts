@@ -2,6 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 import { WeaponSchema } from './weapon.schema';
 import { SpritesSchema } from './sprites.schema';
+import { EnemySchema } from './enemy.schema';
 import { CATEGORIES } from '../../common/constants/catalog';
 import type { Category } from '../../common/constants/catalog';
 
@@ -82,6 +83,13 @@ export class Avatar {
 
   @Prop({ type: AvatarStatsSchema, default: () => ({}) })
   stats: AvatarStatsSchema;
+
+  /**
+   * Ficha de enemigo. Sólo se rellena cuando `category` es 'Enemy'; en un
+   * avatar jugable queda a null y no estorba.
+   */
+  @Prop({ type: EnemySchema, default: null })
+  enemy: EnemySchema | null;
 }
 
 export const AvatarSchema = SchemaFactory.createForClass(Avatar);
@@ -89,3 +97,5 @@ export const AvatarSchema = SchemaFactory.createForClass(Avatar);
 AvatarSchema.index({ order: 1 });
 AvatarSchema.index({ category: 1 });
 AvatarSchema.index({ hidden: 1, retired: 1 });
+// La campaña busca enemigos por clase y nivel en cada combate.
+AvatarSchema.index({ category: 1, 'enemy.class': 1, 'enemy.level': 1 });

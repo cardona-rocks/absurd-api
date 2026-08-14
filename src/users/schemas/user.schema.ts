@@ -5,6 +5,7 @@ import { CollectionItemSchema } from './collection-item.schema';
 import { PowerUpItemSchema } from './powerup-item.schema';
 import { AchievementProgressSchema } from './achievement-progress.schema';
 import { StreakSchema } from './streak.schema';
+import { CampaignProgressSchema } from './campaign-progress.schema';
 import { SIGNUP_CREDITS } from '../../common/constants/game';
 import { ROLES } from '../../common/constants/roles';
 import type { Role } from '../../common/constants/roles';
@@ -80,6 +81,10 @@ export class User {
 
   @Prop({ type: StreakSchema, default: () => ({}) })
   streak: StreakSchema;
+
+  /** Avance en la campaña, separado del récord de PvP. */
+  @Prop({ type: CampaignProgressSchema, default: () => ({}) })
+  campaign: CampaignProgressSchema;
 
   /** Cuenta de invitado creada sin credenciales. */
   @Prop({ default: false })

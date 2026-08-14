@@ -10,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { Avatar, AvatarDocument } from '../avatars/schemas/avatar.schema';
 import { AuditService } from './audit.service';
+import { isEnemyCategory } from '../common/constants/catalog';
 import type { Role } from '../common/constants/roles';
 
 interface Actor {
@@ -27,7 +28,8 @@ export class AdminUsersService {
   ) {}
 
   private async getOrThrow(id: string): Promise<UserDocument> {
-    if (!Types.ObjectId.isValid(id)) throw new NotFoundException('User not found');
+    if (!Types.ObjectId.isValid(id))
+      throw new NotFoundException('User not found');
     const user = await this.userModel.findById(id).exec();
     if (!user) throw new NotFoundException('User not found');
     return user;
@@ -129,7 +131,9 @@ export class AdminUsersService {
     const user = await this.getOrThrow(id);
 
     if (user._id.toString() === actor.id && role !== 'admin') {
-      throw new BadRequestException('No puedes quitarte a ti mismo el rol de admin');
+      throw new BadRequestException(
+        'No puedes quitarte a ti mismo el rol de admin',
+      );
     }
     // Evita quedarse sin ningún admin.
     if (user.role === 'admin' && role !== 'admin') {
@@ -193,17 +197,21 @@ export class AdminUsersService {
     const avatar = await this.avatarModel.findById(avatarId).exec();
     if (!avatar) throw new NotFoundException('Avatar not found');
 
-    const owned = user.collection.some(
-      (c) => c.avatar.toString() === avatarId,
-    );
+    // Ni siquiera un admin puede regalar un enemigo: no es jugable y dejaría
+    // al jugador con una colección que la app no sabe dibujar.
+    if (isEnemyCategory(avatar.category)) {
+      throw new BadRequestException('Los enemigos de campaña no son jugables');
+    }
+
+    const owned = user.collection.some((c) => c.avatar.toString() === avatarId);
     if (owned) throw new BadRequestException('El jugador ya tiene ese avatar');
 
     user.collection.push({
-      avatar: avatar._id as Types.ObjectId,
+      avatar: avatar._id,
       price: 0,
       timestamp: new Date(),
     });
-    if (!user.avatar) user.avatar = avatar._id as Types.ObjectId;
+    if (!user.avatar) user.avatar = avatar._id;
     await user.save();
 
     await this.audit.record({
@@ -239,7 +247,9 @@ export class AdminUsersService {
   /** Restablece la contraseña y obliga a cambiarla al entrar. */
   async resetPassword(id: string, actor: Actor) {
     if (actor.role !== 'admin') {
-      throw new ForbiddenException('Solo un admin puede restablecer contraseñas');
+      throw new ForbiddenException(
+        'Solo un admin puede restablecer contraseñas',
+      );
     }
     const user = await this.getOrThrow(id);
 

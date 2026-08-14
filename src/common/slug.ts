@@ -5,14 +5,16 @@
  * para que un avatar creado a mano y otro migrado acaben igual.
  */
 export function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize('NFD')
-    // Quita los diacríticos que la descomposición NFD deja sueltos.
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40);
+  return (
+    value
+      .toLowerCase()
+      .normalize('NFD')
+      // Quita los diacríticos que la descomposición NFD deja sueltos.
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40)
+  );
 }
 
 /**

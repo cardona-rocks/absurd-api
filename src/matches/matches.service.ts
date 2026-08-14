@@ -43,9 +43,9 @@ export interface RoundResolution {
 
 const POPULATE = [
   { path: 'player1.userId', select: 'name email stats' },
-  { path: 'player1.avatarId', select: 'name slug rarity sprites weapons' },
+  { path: 'player1.avatarId', select: 'name slug category sprites weapons' },
   { path: 'player2.userId', select: 'name email stats' },
-  { path: 'player2.avatarId', select: 'name slug rarity sprites weapons' },
+  { path: 'player2.avatarId', select: 'name slug category sprites weapons' },
   { path: 'matchWinner', select: 'name' },
 ];
 

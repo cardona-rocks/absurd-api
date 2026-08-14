@@ -12,7 +12,7 @@ export interface RankingEntry {
   draws: number;
   matchesPlayed: number;
   winRate: number;
-  avatar: { _id: string; name: string; slug: string } | null;
+  avatar: { _id: string; name: string; slug: string; sprites?: unknown } | null;
   isMe: boolean;
 }
 
@@ -28,7 +28,7 @@ export class RankingsService {
     const stats = user.stats ?? ({} as UserDocument['stats']);
     const played = stats.matchesPlayed ?? 0;
     const avatar = user.avatar as unknown as
-      | { _id: Types.ObjectId; name: string; slug: string }
+      | { _id: Types.ObjectId; name: string; slug: string; sprites?: unknown }
       | null;
     return {
       rank,
@@ -40,7 +40,12 @@ export class RankingsService {
       matchesPlayed: played,
       winRate: played > 0 ? Math.round(((stats.wins ?? 0) / played) * 100) : 0,
       avatar: avatar?._id
-        ? { _id: avatar._id.toString(), name: avatar.name, slug: avatar.slug }
+        ? {
+            _id: avatar._id.toString(),
+            name: avatar.name,
+            slug: avatar.slug,
+            sprites: avatar.sprites,
+          }
         : null,
       isMe: user._id.toString() === meId,
     };
@@ -56,7 +61,7 @@ export class RankingsService {
       .find({ isGuest: false })
       .sort({ 'stats.wins': -1, 'stats.loses': 1, createdAt: 1 })
       .limit(capped)
-      .populate('avatar', 'name slug')
+      .populate('avatar', 'name slug category sprites')
       .exec();
 
     const top = users.map((u, i) => this.toEntry(u, i + 1, meId));

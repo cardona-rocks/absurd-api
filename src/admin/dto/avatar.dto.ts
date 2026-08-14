@@ -3,6 +3,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Length,
@@ -12,8 +13,42 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { CATEGORIES, SPRITE_TYPES } from '../../common/constants/catalog';
-import type { Category, SpriteType } from '../../common/constants/catalog';
+import {
+  CATEGORIES,
+  ENEMY_CLASSES,
+  SPRITE_TYPES,
+} from '../../common/constants/catalog';
+import type {
+  Category,
+  EnemyClass,
+  SpriteType,
+} from '../../common/constants/catalog';
+
+/** Ficha de enemigo. Sólo tiene sentido si `category` es 'Enemy'. */
+export class EnemyFieldsDto {
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(9999)
+  level?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  hearts?: number;
+
+  @IsOptional()
+  @IsIn(ENEMY_CLASSES as unknown as string[])
+  class?: EnemyClass;
+
+  /** 0 = puro azar, 1 = siempre responde a la manía del jugador. */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  counterRate?: number;
+}
 
 export class SpriteImageDto {
   @IsString()
@@ -123,6 +158,11 @@ export class CreateAvatarDto {
   @ValidateNested()
   @Type(() => SpritesDto)
   sprites?: SpritesDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => EnemyFieldsDto)
+  enemy?: EnemyFieldsDto;
 }
 
 export class UpdateAvatarDto {
@@ -180,6 +220,11 @@ export class UpdateAvatarDto {
   @ValidateNested()
   @Type(() => SpritesDto)
   sprites?: SpritesDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => EnemyFieldsDto)
+  enemy?: EnemyFieldsDto;
 }
 
 export class UploadSpriteQueryDto {

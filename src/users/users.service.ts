@@ -13,6 +13,7 @@ import {
 } from './schemas/credit-purchase.schema';
 import { AvatarsService } from '../avatars/avatars.service';
 import { SIGNUP_CREDITS } from '../common/constants/game';
+import { isEnemyCategory } from '../common/constants/catalog';
 
 export interface CreateUserDto {
   name: string;
@@ -70,8 +71,11 @@ export class UsersService {
     if (!Types.ObjectId.isValid(id)) return null;
     return this.userModel
       .findById(id)
-      .populate('avatar', 'name slug price rarity tagline ability sprites')
-      .populate('collection.avatar', 'name slug price rarity sprites')
+      .populate(
+        'avatar',
+        'name slug price category description tagline ability sprites',
+      )
+      .populate('collection.avatar', 'name slug price category sprites')
       .exec();
   }
 
@@ -149,6 +153,14 @@ export class UsersService {
 
   async setAvatar(userId: string, avatarId: string): Promise<UserDocument> {
     const user = await this.getOrThrow(userId);
+
+    // Cinturón y tirantes: un enemigo no debería estar en ninguna colección,
+    // pero si alguno se colara por un arreglo manual, aquí se para.
+    const avatar = await this.avatarsService.findById(avatarId);
+    if (avatar && isEnemyCategory(avatar.category)) {
+      throw new BadRequestException('Ese avatar no es jugable');
+    }
+
     const inCollection = user.collection.some((c) => {
       const id =
         c.avatar instanceof Types.ObjectId
@@ -192,6 +204,11 @@ export class UsersService {
     const avatar = await this.avatarsService.getOrThrow(avatarId);
     const user = await this.getOrThrow(userId);
 
+    // Los enemigos son del sistema: no tienen precio ni se coleccionan.
+    if (isEnemyCategory(avatar.category)) {
+      throw new BadRequestException('Ese avatar no está a la venta');
+    }
+
     // Los ocultos y los retirados no se venden, aunque se sepa el id.
     if (avatar.hidden || avatar.retired) {
       throw new BadRequestException('Ese avatar no está a la venta');
@@ -213,10 +230,47 @@ export class UsersService {
 
     user.credits -= avatar.price;
     // El primer avatar comprado se selecciona automáticamente.
-    if (!user.avatar) user.avatar = avatar._id as Types.ObjectId;
+    if (!user.avatar) user.avatar = avatar._id;
     await user.save();
     await this.addToCollection(userId, avatarId, avatar.price);
     return this.getOrThrow(userId);
+  }
+
+  // -------------------------------------------------------------- campaña
+
+  /**
+   * Aplica el resultado de un nivel de campaña.
+   *
+   * Sólo desbloquea el siguiente nivel si se ganó el que tocaba avanzar: se
+   * puede repetir un nivel viejo cuantas veces se quiera sin que el progreso
+   * se mueva. El récord de PvP (`stats.wins`/`loses`) no se toca nunca desde
+   * aquí; lo único compartido es el monedero y los créditos ganados.
+   */
+  async applyCampaignResult(
+    userId: string,
+    r: { level: number; won: boolean; credits: number },
+  ): Promise<void> {
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) return;
+
+    const c = user.campaign;
+    if (r.won) {
+      c.wins += 1;
+      c.cleared += 1;
+      // Avanza sólo si acaba de superar su frontera.
+      if (r.level >= c.level) c.level = r.level + 1;
+      c.bestLevel = Math.max(c.bestLevel, r.level);
+    } else {
+      c.loses += 1;
+    }
+    c.lastPlayedAt = new Date();
+
+    if (r.credits > 0) {
+      user.credits += r.credits;
+      user.stats.creditsEarned += r.credits;
+    }
+
+    await user.save();
   }
 
   // ---------------------------------------------------------- estadísticas

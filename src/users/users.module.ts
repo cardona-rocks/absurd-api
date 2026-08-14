@@ -3,7 +3,10 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { User, UserSchema } from './schemas/user.schema';
-import { CreditPurchase, CreditPurchaseSchema } from './schemas/credit-purchase.schema';
+import {
+  CreditPurchase,
+  CreditPurchaseSchema,
+} from './schemas/credit-purchase.schema';
 import { AvatarsModule } from '../avatars/avatars.module';
 
 @Module({

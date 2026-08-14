@@ -42,7 +42,10 @@ export class UsersController {
     @CurrentUser('sub') userId: string,
     @Body() dto: PurchaseAvatarDto,
   ) {
-    const user = await this.usersService.purchaseAvatarById(userId, dto.avatarId);
+    const user = await this.usersService.purchaseAvatarById(
+      userId,
+      dto.avatarId,
+    );
     return this.usersService.toResponse(user);
   }
 

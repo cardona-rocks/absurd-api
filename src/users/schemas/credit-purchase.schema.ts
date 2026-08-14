@@ -15,4 +15,5 @@ export class CreditPurchase {
   timestamp: Date;
 }
 
-export const CreditPurchaseSchema = SchemaFactory.createForClass(CreditPurchase);
+export const CreditPurchaseSchema =
+  SchemaFactory.createForClass(CreditPurchase);

@@ -96,7 +96,9 @@ export class MongoExceptionFilter implements ExceptionFilter {
     return {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       message:
-        exception instanceof Error ? exception.message : 'Error interno del servidor',
+        exception instanceof Error
+          ? exception.message
+          : 'Error interno del servidor',
     };
   }
 }

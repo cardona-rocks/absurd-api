@@ -13,6 +13,9 @@ import { UploadsService } from '../uploads/uploads.service';
 import type { UploadedFile } from '../uploads/uploads.service';
 import { AuditService } from './audit.service';
 import {
+  ENEMY_CATEGORY,
+  isEnemyCategory,
+  REQUIRED_ENEMY_SPRITE_TYPES,
   REQUIRED_SPRITE_TYPES,
   SPRITE_TYPES,
   SPRITE_LABELS,
@@ -43,6 +46,12 @@ export class AdminAvatarsService {
    * poder guardar borradores mientras se suben las imágenes.
    */
   private assertPublishable(avatar: AvatarDocument): void {
+    // A un enemigo sólo se le ve de frente, así que la imagen trasera no se le
+    // pide. Tampoco se le bloquea el guardado por no tener ninguna: se siembran
+    // sin arte y el panel los marca como "sin imagen" hasta que se suba. Si se
+    // bloqueara, no habría forma de editar un enemigo recién sembrado.
+    if (isEnemyCategory(avatar.category)) return;
+
     const missing = REQUIRED_SPRITE_TYPES.filter(
       (t) => (avatar.sprites?.[t]?.length ?? 0) === 0,
     );
@@ -51,6 +60,50 @@ export class AdminAvatarsService {
         `Faltan imágenes obligatorias: ${missing.map((m) => SPRITE_LABELS[m]).join(' y ')}.`,
       );
     }
+  }
+
+  /** ¿Se puede sacar a pelear? Un enemigo necesita al menos su imagen de frente. */
+  private enemyReady(avatar: {
+    category?: string;
+    sprites?: Record<string, unknown[]>;
+  }): boolean {
+    if (!isEnemyCategory(avatar.category)) return true;
+    return REQUIRED_ENEMY_SPRITE_TYPES.every(
+      (t) => (avatar.sprites?.[t]?.length ?? 0) > 0,
+    );
+  }
+
+  /**
+   * Deja coherente la ficha de enemigo con la categoría.
+   *
+   * Al pasar un avatar a 'Enemy' se le crea la ficha con valores por defecto, y
+   * al sacarlo de 'Enemy' se le quita: así no queda un `enemy` fantasma en un
+   * avatar jugable ni un enemigo sin datos de combate.
+   */
+  private syncEnemyFields(
+    avatar: AvatarDocument,
+    patch?: Partial<{
+      level: number;
+      hearts: number;
+      class: string;
+      counterRate: number;
+    }>,
+  ): void {
+    if (!isEnemyCategory(avatar.category)) {
+      avatar.enemy = null;
+      return;
+    }
+    const current = avatar.enemy ?? {
+      level: 1,
+      hearts: 3,
+      class: 'Basic',
+      counterRate: null,
+    };
+    avatar.enemy = { ...current, ...(patch ?? {}) } as never;
+
+    // Un enemigo no se vende ni se lista en la tienda, pase lo que pase.
+    avatar.price = 0;
+    avatar.hidden = true;
   }
 
   async list(params: {
@@ -63,7 +116,13 @@ export class AdminAvatarsService {
     const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
 
     const filter: Record<string, unknown> = {};
-    if (params.category) filter.category = params.category;
+    if (params.category) {
+      filter.category = params.category;
+    } else {
+      // Los enemigos tienen su propia pantalla; aquí sólo estorbarían. Se ven
+      // pidiendo explícitamente `category=Enemy`.
+      filter.category = { $ne: ENEMY_CATEGORY };
+    }
     if (params.search) {
       filter.$or = [
         { name: { $regex: params.search, $options: 'i' } },
@@ -85,10 +144,15 @@ export class AdminAvatarsService {
     const counts = await this.ownershipCounts(items.map((a) => a._id));
 
     return {
-      items: items.map((a) => ({
-        ...a.toObject(),
-        ownedBy: counts.get(a._id.toString()) ?? 0,
-      })),
+      items: items.map((a) => {
+        const obj = a.toObject();
+        return {
+          ...obj,
+          ownedBy: counts.get(a._id.toString()) ?? 0,
+          // El panel avisa de los enemigos que aún no tienen imagen de frente.
+          ready: this.enemyReady(obj as never),
+        };
+      }),
       total,
       page,
       pages: Math.ceil(total / limit),
@@ -99,7 +163,10 @@ export class AdminAvatarsService {
     ids: Types.ObjectId[],
   ): Promise<Map<string, number>> {
     if (!ids.length) return new Map();
-    const rows = await this.userModel.aggregate<{ _id: Types.ObjectId; n: number }>([
+    const rows = await this.userModel.aggregate<{
+      _id: Types.ObjectId;
+      n: number;
+    }>([
       { $unwind: '$collection' },
       { $match: { 'collection.avatar': { $in: ids } } },
       { $group: { _id: '$collection.avatar', n: { $sum: 1 } } },
@@ -158,7 +225,8 @@ export class AdminAvatarsService {
   }
 
   async get(id: string): Promise<AvatarDocument> {
-    if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Avatar not found');
+    if (!Types.ObjectId.isValid(id))
+      throw new NotFoundException('Avatar not found');
     const avatar = await this.avatarModel.findById(id).exec();
     if (!avatar) throw new NotFoundException('Avatar not found');
     return avatar;
@@ -172,6 +240,8 @@ export class AdminAvatarsService {
       ...dto,
       sprites: dto.sprites ?? {},
     });
+    this.syncEnemyFields(created, dto.enemy);
+    if (created.isModified()) await created.save();
 
     await this.audit.record({
       actorId: actor.id,
@@ -198,7 +268,8 @@ export class AdminAvatarsService {
         slug: dto.slug,
         _id: { $ne: avatar._id },
       });
-      if (clash) throw new ConflictException('Ya existe un avatar con ese slug');
+      if (clash)
+        throw new ConflictException('Ya existe un avatar con ese slug');
     }
 
     const before = {
@@ -217,6 +288,8 @@ export class AdminAvatarsService {
         if (next) avatar.sprites[type] = next as never;
       }
     }
+
+    this.syncEnemyFields(avatar, dto.enemy);
 
     // Si está visible en tienda tiene que poder dibujarse.
     if (!avatar.hidden) this.assertPublishable(avatar);

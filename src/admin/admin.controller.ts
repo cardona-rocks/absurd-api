@@ -21,9 +21,14 @@ import type { JwtPayload } from '../common/decorators/current-user.decorator';
 import { AdminAvatarsService } from './admin-avatars.service';
 import { AdminUsersService } from './admin-users.service';
 import { AdminStatsService } from './admin-stats.service';
+import { AdminCampaignService } from './admin-campaign.service';
 import { AuditService } from './audit.service';
 import { UsersService } from '../users/users.service';
 import { CreateAvatarDto, UpdateAvatarDto } from './dto/avatar.dto';
+import {
+  CreateLevelOverrideDto,
+  UpdateCampaignLevelDto,
+} from './dto/campaign-level.dto';
 import {
   AdjustCreditsDto,
   BanUserDto,
@@ -31,7 +36,12 @@ import {
   ModerationNoteDto,
   SetRoleDto,
 } from './dto/moderation.dto';
-import { CATEGORIES, SPRITE_TYPES } from '../common/constants/catalog';
+import {
+  CATEGORIES,
+  ENEMY_CLASSES,
+  SPRITE_TYPES,
+} from '../common/constants/catalog';
+import { LEVEL_KINDS, CYCLE_LENGTH } from '../common/constants/campaign';
 import type { SpriteType } from '../common/constants/catalog';
 import type { UploadedFile } from '../uploads/uploads.service';
 import { StorageService } from '../uploads/storage.service';
@@ -48,6 +58,7 @@ export class AdminController {
     private avatars: AdminAvatarsService,
     private users: AdminUsersService,
     private stats: AdminStatsService,
+    private campaign: AdminCampaignService,
     private audit: AuditService,
     private usersService: UsersService,
     private storage: StorageService,
@@ -67,6 +78,9 @@ export class AdminController {
       },
       categories: CATEGORIES,
       spriteTypes: SPRITE_TYPES,
+      enemyClasses: ENEMY_CLASSES,
+      levelKinds: LEVEL_KINDS,
+      cycleLength: CYCLE_LENGTH,
     };
   }
 
@@ -183,6 +197,79 @@ export class AdminController {
     @Body() body: { filenames: string[] },
   ) {
     return this.avatars.reorderSprites(id, type, body.filenames ?? []);
+  }
+
+  // ---------------------------------------------------------------- campaña
+
+  /** Ciclo, excepciones y bestiario, todo de una vez. */
+  @Get('campaign')
+  campaignOverview() {
+    return this.campaign.overview();
+  }
+
+  @Get('campaign/stats')
+  campaignStats() {
+    return this.campaign.stats();
+  }
+
+  /** Simula qué sale en una tanda de niveles, para revisar el equilibrio. */
+  @Get('campaign/preview')
+  campaignPreview(
+    @Query('from', new DefaultValuePipe(1), ParseIntPipe) from: number,
+    @Query('count', new DefaultValuePipe(20), ParseIntPipe) count: number,
+  ) {
+    return this.campaign.preview(from, count);
+  }
+
+  @Patch('campaign/cycle/:slot')
+  saveSlot(
+    @CurrentUser() actor: JwtPayload,
+    @Param('slot', ParseIntPipe) slot: number,
+    @Body() dto: UpdateCampaignLevelDto,
+  ) {
+    return this.campaign.saveSlot(slot, dto, {
+      id: actor.sub,
+      name: actor.email,
+    });
+  }
+
+  @Post('campaign/cycle/:slot/reset')
+  resetSlot(
+    @CurrentUser() actor: JwtPayload,
+    @Param('slot', ParseIntPipe) slot: number,
+  ) {
+    return this.campaign.resetSlot(slot, { id: actor.sub, name: actor.email });
+  }
+
+  @Post('campaign/overrides')
+  createOverride(
+    @CurrentUser() actor: JwtPayload,
+    @Body() dto: CreateLevelOverrideDto,
+  ) {
+    return this.campaign.createOverride(dto, {
+      id: actor.sub,
+      name: actor.email,
+    });
+  }
+
+  @Patch('campaign/overrides/:id')
+  updateOverride(
+    @CurrentUser() actor: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: UpdateCampaignLevelDto,
+  ) {
+    return this.campaign.updateOverride(id, dto, {
+      id: actor.sub,
+      name: actor.email,
+    });
+  }
+
+  @Delete('campaign/overrides/:id')
+  removeOverride(@CurrentUser() actor: JwtPayload, @Param('id') id: string) {
+    return this.campaign.removeOverride(id, {
+      id: actor.sub,
+      name: actor.email,
+    });
   }
 
   // ---------------------------------------------------------------- usuarios

@@ -10,6 +10,7 @@ import { PowerUpsModule } from './powerups/powerups.module';
 import { AchievementsModule } from './achievements/achievements.module';
 import { RankingsModule } from './rankings/rankings.module';
 import { TournamentsModule } from './tournaments/tournaments.module';
+import { CampaignModule } from './campaign/campaign.module';
 import { AdminModule } from './admin/admin.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -37,6 +38,7 @@ import { AppController } from './app.controller';
     AchievementsModule,
     RankingsModule,
     TournamentsModule,
+    CampaignModule,
     UploadsModule,
     AdminModule,
   ],

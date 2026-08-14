@@ -37,7 +37,9 @@ export class AuditService {
         meta: entry.meta ?? {},
       });
     } catch (e) {
-      this.logger.error(`No se pudo auditar ${entry.action}: ${(e as Error).message}`);
+      this.logger.error(
+        `No se pudo auditar ${entry.action}: ${(e as Error).message}`,
+      );
     }
   }
 
