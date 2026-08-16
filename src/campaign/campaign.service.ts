@@ -33,6 +33,7 @@ import {
   CAMPAIGN_MAX_ROUNDS,
   campaignReward,
   COUNTER_RATE_BY_CLASS,
+  displayNameForLevel,
   LAST_MOVE_WEIGHT_BY_CLASS,
 } from '../common/constants/campaign';
 import {
@@ -88,6 +89,33 @@ export class CampaignService {
   }
 
   /**
+   * El nivel tal y como lo ve la app.
+   *
+   * Se le quitan `slot` y `cycle`: el ciclo de 20 es cosa nuestra y del panel,
+   * y si viajara hasta el cliente bastaría con mirar la respuesta para ver que
+   * los niveles se repiten. El nombre también se genera aquí, por nivel
+   * absoluto, para que el 20 y el 40 no se llamen igual.
+   */
+  private toPlayerLevel(plan: LevelPlan) {
+    const generated = displayNameForLevel(plan.level, plan.kind);
+    return {
+      level: plan.level,
+      // Un nombre puesto a mano en el panel manda: es para ese nivel y sólo ese.
+      name: plan.source === 'override' && plan.name ? plan.name : generated,
+      kind: plan.kind,
+      enemyClass: plan.enemyClass,
+      enemyCount: plan.enemyCount,
+      hearts: plan.hearts,
+      playerHearts: plan.playerHearts,
+    };
+  }
+
+  /** Un nivel suelto, para la app. */
+  async playerLevel(level: number) {
+    return this.toPlayerLevel(await this.planFor(level));
+  }
+
+  /**
    * El mapa: el nivel al que ha llegado el jugador y los siguientes.
    *
    * No se listan "todos" los niveles porque no hay final; se devuelve una
@@ -108,7 +136,7 @@ export class CampaignService {
         bestLevel: progress.bestLevel,
       },
       levels: planRange(from, count, configs).map((p) => ({
-        ...p,
+        ...this.toPlayerLevel(p),
         // Se puede entrar a cualquier nivel ya alcanzado, para repetirlo.
         unlocked: p.level <= progress.level,
         cleared: p.level < progress.level,
@@ -229,7 +257,7 @@ export class CampaignService {
       slot: plan.slot,
       cycle: plan.cycle,
       kind: plan.kind,
-      levelName: plan.name,
+      levelName: this.toPlayerLevel(plan).name,
       playerHearts: plan.playerHearts + extraHearts,
       playerMaxHearts: plan.playerHearts + extraHearts,
       enemies,

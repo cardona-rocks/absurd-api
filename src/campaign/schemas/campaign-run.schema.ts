@@ -155,6 +155,25 @@ export class CampaignRun {
 
 export const CampaignRunSchema = SchemaFactory.createForClass(CampaignRun);
 
+/**
+ * `slot` y `cycle` se guardan pero no salen de aquí.
+ *
+ * Son la contabilidad interna del ciclo de 20 niveles, y el jugador no debe
+ * enterarse de que la campaña se repite: viendo un `cycle: 4` en la respuesta
+ * quedaría claro al instante. El panel los consulta con `.lean()`, que no pasa
+ * por esta transformación, así que sigue viéndolos.
+ */
+for (const target of ['toJSON', 'toObject'] as const) {
+  CampaignRunSchema.set(target, {
+    transform: (_doc, ret) => {
+      const out = ret as unknown as Record<string, unknown>;
+      delete out.slot;
+      delete out.cycle;
+      return out;
+    },
+  });
+}
+
 // Buscar el intento en curso de un jugador es la consulta más frecuente.
 CampaignRunSchema.index({ userId: 1, status: 1 });
 CampaignRunSchema.index({ userId: 1, level: 1 });

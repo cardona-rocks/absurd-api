@@ -77,12 +77,107 @@ export function heartsForSlot(slot: number, cycle: number): number[] {
   }
 }
 
-const SLOT_NAMES: Record<number, string> = {
-  6: 'Gauntlet: doble ración',
-  10: 'Élite',
-  16: 'Gauntlet: la revancha',
-  20: 'Jefe de ciclo',
+/**
+ * Nombres que ve el jugador, por tipo de nivel.
+ *
+ * El ciclo es un detalle de implementación y no debe notarse desde la app: si
+ * el nivel 20 y el 40 se llamaran igual, el bucle quedaría a la vista. Por eso
+ * cada vuelta estrena nombre, tomándolo de estas listas por el número de nivel.
+ * Cuando se acaban, se vuelve a empezar, pero para entonces el jugador lleva
+ * cien niveles.
+ */
+const NAME_POOLS: Record<Exclude<LevelKind, 'basic'>, string[]> = {
+  // El doble de largo que las demás: hay dos gauntlets por vuelta, así que se
+  // gastan al doble de ritmo y necesitan el doble de nombres para durar igual.
+  gauntlet: [
+    'Doble ración',
+    'Vienen en pareja',
+    'Dos por el precio de uno',
+    'Fila india',
+    'Uno detrás de otro',
+    'Sin descanso',
+    'Turno doble',
+    'La cola del ridículo',
+    'Segundo asalto incluido',
+    'No venían solos',
+    'Traían refuerzos',
+    'Se avisaron entre ellos',
+    'Tándem lamentable',
+    'Dúo desafinado',
+    'Relevo mixto',
+    'Dos manos, dos problemas',
+    'Uno se cansa antes',
+    'Vienen de dos en dos',
+    'La pareja de hecho',
+    'Ni uno ni dos: dos',
+  ],
+  elite: [
+    'Algo se acerca',
+    'Esto ya es serio',
+    'Categoría superior',
+    'Sube el listón',
+    'Aquí se acaba lo fácil',
+    'Peso pesado',
+    'Con reservas',
+    'El que no perdona',
+    'Un escalón más',
+    'Se pone interesante',
+  ],
+  boss: [
+    'El Lunes eterno',
+    'Punto de no retorno',
+    'Aquí duele',
+    'El muro',
+    'Sin excusas',
+    'A vida o muerte',
+    'El que todos temen',
+    'Última parada',
+    'Nadie pasa de aquí',
+    'El final de algo',
+  ],
 };
+
+/** Ranuras del ciclo que plantean cada tipo de combate, en orden. */
+const SLOTS_BY_KIND: Record<LevelKind, number[]> = (() => {
+  const out: Record<LevelKind, number[]> = {
+    basic: [],
+    gauntlet: [],
+    elite: [],
+    boss: [],
+  };
+  for (let slot = 1; slot <= CYCLE_LENGTH; slot++)
+    out[kindForSlot(slot)].push(slot);
+  return out;
+})();
+
+/**
+ * Nombre que se le enseña al jugador para un nivel.
+ *
+ * Los niveles corrientes no llevan nombre: la app pone "Nivel N" y ya. Los
+ * especiales sacan uno de la lista según **cuántos niveles de su tipo han
+ * salido antes**, no según la vuelta.
+ *
+ * La diferencia importa: hay dos gauntlets por vuelta (las ranuras 6 y 16), así
+ * que contando por vueltas los niveles 206 y 216 acababan llamándose igual y el
+ * bucle asomaba dentro de una misma pantalla. Contando apariciones, cada
+ * gauntlet estrena nombre.
+ */
+export function displayNameForLevel(level: number, kind: LevelKind): string {
+  if (kind === 'basic') return '';
+
+  const n = Math.max(1, Math.trunc(level) || 1);
+  const slot = ((n - 1) % CYCLE_LENGTH) + 1;
+  const turn = Math.floor((n - 1) / CYCLE_LENGTH);
+
+  const slots = SLOTS_BY_KIND[kind];
+  // Si el panel cambió el tipo de una ranura, no estará en la lista: se toma
+  // la primera posición y a seguir. Sigue siendo estable para ese nivel.
+  const within = Math.max(0, slots.indexOf(slot));
+  const ordinal = turn * Math.max(1, slots.length) + within;
+
+  const pool = NAME_POOLS[kind];
+  return pool[ordinal % pool.length];
+}
 
 /** La plantilla por defecto de las 20 ranuras, la que siembra la migración. */
 export const DEFAULT_CYCLE: CycleSlotSpec[] = Array.from(
@@ -97,7 +192,10 @@ export const DEFAULT_CYCLE: CycleSlotSpec[] = Array.from(
 
     return {
       slot,
-      name: SLOT_NAMES[slot] ?? '',
+      // Vacío a propósito: el nombre que ve el jugador se genera por nivel,
+      // no por ranura, para que no se repita cada vuelta. Este campo es una
+      // etiqueta interna del panel.
+      name: '',
       kind,
       enemyClass: enemyClassForKind(kind),
       enemyCount: hearts.length,

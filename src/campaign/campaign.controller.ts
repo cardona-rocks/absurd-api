@@ -36,7 +36,7 @@ export class CampaignController {
   /** Qué plantea un nivel concreto, sin empezarlo. */
   @Get('levels/:level')
   async level(@Param('level', ParseIntPipe) level: number) {
-    return this.campaign.planFor(level);
+    return this.campaign.playerLevel(level);
   }
 
   /** El intento en curso, si el jugador dejó uno a medias. */
