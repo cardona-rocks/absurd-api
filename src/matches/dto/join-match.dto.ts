@@ -1,4 +1,11 @@
-import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, Length } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsOptional,
+  IsString,
+  Length,
+} from 'class-validator';
 import {
   POWERUP_IDS,
   MAX_EQUIPPED_POWERUPS,
@@ -6,7 +13,13 @@ import {
 import type { PowerUpId } from '../../common/constants/game';
 
 export class JoinMatchDto {
-  /** Power ups a equipar en este combate. */
+  /**
+   * Se acepta pero se ignora: los power ups son exclusivos de la campaña.
+   *
+   * El campo se mantiene porque la validación rechaza propiedades desconocidas
+   * (`forbidNonWhitelisted`), y quitarlo haría fallar con un 400 a las versiones
+   * de la app que todavía lo envían.
+   */
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(MAX_EQUIPPED_POWERUPS)

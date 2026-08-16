@@ -4,7 +4,11 @@ import { PlayerSchema } from './player.schema';
 import { RoundSchema } from './round.schema';
 import { MatchLogSchema } from './match-log.schema';
 
-export type MatchStatus = 'Searching' | 'In progress' | 'Complete' | 'Cancelled';
+export type MatchStatus =
+  | 'Searching'
+  | 'In progress'
+  | 'Complete'
+  | 'Cancelled';
 
 /** Cómo se creó el combate. */
 export type MatchMode = 'quick' | 'private' | 'tournament';

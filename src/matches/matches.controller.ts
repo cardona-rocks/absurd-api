@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { MatchesService } from './matches.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { JoinMatchDto, JoinPrivateDto, UsePowerUpDto } from './dto/join-match.dto';
+import { JoinPrivateDto, UsePowerUpDto } from './dto/join-match.dto';
 
 @Controller('matches')
 export class MatchesController {
@@ -18,24 +18,20 @@ export class MatchesController {
 
   /** Buscar rival: entra a un combate abierto o crea uno. */
   @Post('join')
-  createOrJoin(@CurrentUser('sub') userId: string, @Body() dto: JoinMatchDto) {
-    return this.matchesService.createOrJoin(userId, dto?.powerUps ?? []);
+  createOrJoin(@CurrentUser('sub') userId: string) {
+    return this.matchesService.createOrJoin(userId);
   }
 
   /** Crea una sala privada y devuelve su código. */
   @Post('private')
-  createPrivate(@CurrentUser('sub') userId: string, @Body() dto: JoinMatchDto) {
-    return this.matchesService.createPrivate(userId, dto?.powerUps ?? []);
+  createPrivate(@CurrentUser('sub') userId: string) {
+    return this.matchesService.createPrivate(userId);
   }
 
   /** Entra a una sala privada con su código. */
   @Post('private/join')
   joinPrivate(@CurrentUser('sub') userId: string, @Body() dto: JoinPrivateDto) {
-    return this.matchesService.joinPrivate(
-      userId,
-      dto.roomCode,
-      dto.powerUps ?? [],
-    );
+    return this.matchesService.joinPrivate(userId, dto.roomCode);
   }
 
   /** Combate activo del usuario, para reconectar. */

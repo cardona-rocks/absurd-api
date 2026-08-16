@@ -32,7 +32,9 @@ const room = (matchId: string) => `match:${matchId}`;
   namespace: 'match',
   cors: { origin: '*' },
 })
-export class MatchesGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class MatchesGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -163,9 +165,7 @@ export class MatchesGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
       // Confirmamos al que eligió sin revelar la jugada al rival.
       client.emit('choice_locked', { choice: data.choice });
-      client.broadcast
-        .to(room(matchId))
-        .emit('opponent_locked', { userId });
+      client.broadcast.to(room(matchId)).emit('opponent_locked', { userId });
 
       if (!result.round) return;
 

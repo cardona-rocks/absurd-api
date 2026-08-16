@@ -17,13 +17,11 @@ import { AchievementsService } from '../achievements/achievements.service';
 import { TournamentsService } from '../tournaments/tournaments.service';
 import {
   BASE_HEARTS,
-  EXTRA_LIFE_HEARTS,
   MAX_ROUNDS,
   WIN_REWARD,
   LOSS_REWARD,
   ROUND_REWARD,
   DOUBLE_OR_NOTHING_MULTIPLIER,
-  MAX_EQUIPPED_POWERUPS,
   Choice,
   CHOICES,
   PowerUpId,
@@ -94,28 +92,18 @@ export class MatchesService {
     ).join('');
   }
 
-  /** Valida los power ups elegidos y descuenta los de pre-combate. */
-  private async buildPlayer(
-    userId: string,
-    avatarId: Types.ObjectId,
-    requested: PowerUpId[] = [],
-  ): Promise<PlayerSchema> {
+  /**
+   * Monta un jugador del combate.
+   *
+   * En el PvP no entran power ups: son cosa de la campaña. Contra otra persona
+   * darían ventaja a quien más compre, así que el enfrentamiento entre jugadores
+   * se juega a manos limpias. Se ignora lo que pida el cliente en vez de
+   * devolver error, para que una app antigua que aún los mande siga funcionando;
+   * lo que no puede pasar es que se equipen o se gasten.
+   */
+  private buildPlayer(userId: string, avatarId: Types.ObjectId): PlayerSchema {
     const equipped: PowerUpId[] = [];
-    for (const id of requested.slice(0, MAX_EQUIPPED_POWERUPS)) {
-      if (equipped.includes(id)) continue;
-      if (await this.powerUpsService.has(userId, id)) equipped.push(id);
-    }
-
-    let maxHearts = BASE_HEARTS;
-    if (equipped.includes('vida')) {
-      // Los de pre-combate se consumen al entrar; el resto al activarlos.
-      if (await this.powerUpsService.consume(userId, 'vida')) {
-        maxHearts += EXTRA_LIFE_HEARTS;
-      }
-    }
-    if (equipped.includes('doble')) {
-      await this.powerUpsService.consume(userId, 'doble');
-    }
+    const maxHearts = BASE_HEARTS;
 
     return {
       userId: new Types.ObjectId(userId),
@@ -123,7 +111,7 @@ export class MatchesService {
       hearts: maxHearts,
       maxHearts,
       equippedPowerUps: equipped,
-      usedPowerUps: equipped.filter((id) => id === 'vida' || id === 'doble'),
+      usedPowerUps: [],
       shieldActive: false,
       criticalArmed: false,
       creditsEarned: 0,
@@ -157,10 +145,7 @@ export class MatchesService {
   // ------------------------------------------------------------ matchmaking
 
   /** Busca un combate rápido abierto o crea uno nuevo. */
-  async createOrJoin(
-    userId: string,
-    powerUps: PowerUpId[] = [],
-  ): Promise<MatchDocument> {
+  async createOrJoin(userId: string): Promise<MatchDocument> {
     const user = await this.assertPlayable(userId);
     const avatarId = user.avatar as Types.ObjectId;
 
@@ -174,7 +159,7 @@ export class MatchesService {
       .exec();
 
     if (open) {
-      open.player2 = await this.buildPlayer(userId, avatarId, powerUps);
+      open.player2 = this.buildPlayer(userId, avatarId);
       open.status = 'In progress';
       open.startedAt = new Date();
       open.lastActivityAt = new Date();
@@ -184,7 +169,7 @@ export class MatchesService {
     }
 
     const created = await this.matchModel.create({
-      player1: await this.buildPlayer(userId, avatarId, powerUps),
+      player1: this.buildPlayer(userId, avatarId),
       player2: null,
       mode: 'quick',
       status: 'Searching',
@@ -200,10 +185,7 @@ export class MatchesService {
   }
 
   /** Crea una sala privada con código para invitar a un amigo. */
-  async createPrivate(
-    userId: string,
-    powerUps: PowerUpId[] = [],
-  ): Promise<MatchDocument> {
+  async createPrivate(userId: string): Promise<MatchDocument> {
     const user = await this.assertPlayable(userId);
     const avatarId = user.avatar as Types.ObjectId;
 
@@ -219,7 +201,7 @@ export class MatchesService {
     }
 
     const created = await this.matchModel.create({
-      player1: await this.buildPlayer(userId, avatarId, powerUps),
+      player1: this.buildPlayer(userId, avatarId),
       player2: null,
       mode: 'private' as MatchMode,
       roomCode,
@@ -236,11 +218,7 @@ export class MatchesService {
   }
 
   /** Entra a una sala privada usando su código. */
-  async joinPrivate(
-    userId: string,
-    code: string,
-    powerUps: PowerUpId[] = [],
-  ): Promise<MatchDocument> {
+  async joinPrivate(userId: string, code: string): Promise<MatchDocument> {
     const user = await this.assertPlayable(userId);
     const roomCode = code.trim().toUpperCase();
 
@@ -248,17 +226,15 @@ export class MatchesService {
       .findOne({ roomCode, status: 'Searching' })
       .exec();
     if (!match) {
-      throw new NotFoundException('No encontramos esa sala. ¿El código está bien?');
+      throw new NotFoundException(
+        'No encontramos esa sala. ¿El código está bien?',
+      );
     }
     if (match.player1.userId.toString() === userId) {
       throw new BadRequestException('Ya estás en esta sala, esperando rival');
     }
 
-    match.player2 = await this.buildPlayer(
-      userId,
-      user.avatar as Types.ObjectId,
-      powerUps,
-    );
+    match.player2 = this.buildPlayer(userId, user.avatar as Types.ObjectId);
     match.status = 'In progress';
     match.startedAt = new Date();
     match.lastActivityAt = new Date();
@@ -298,17 +274,13 @@ export class MatchesService {
       .findOne({ rematchOf: previous._id, status: 'Searching' })
       .exec();
     if (pending && pending.player1.userId.toString() !== userId) {
-      return this.joinPrivate(userId, pending.roomCode ?? '', []);
+      return this.joinPrivate(userId, pending.roomCode ?? '');
     }
     if (pending) return this.getMatch(pending._id.toString());
 
     const user = await this.assertPlayable(userId);
     const created = await this.matchModel.create({
-      player1: await this.buildPlayer(
-        userId,
-        user.avatar as Types.ObjectId,
-        [],
-      ),
+      player1: this.buildPlayer(userId, user.avatar as Types.ObjectId),
       player2: null,
       mode: previous.mode,
       roomCode: this.generateRoomCode(),
@@ -336,9 +308,13 @@ export class MatchesService {
     const side = this.sideOf(match, userId);
     if (!side) throw new ForbiddenException('No estás en este combate');
 
+    // Los power ups son exclusivos de la campaña: en el PvP nadie lleva
+    // ninguno equipado, así que este camino siempre se corta aquí.
     const me = match[side] as PlayerSchema;
     if (!me.equippedPowerUps.includes(powerUpId)) {
-      throw new BadRequestException('No equipaste ese power up');
+      throw new BadRequestException(
+        'Los power ups sólo se pueden usar en la campaña',
+      );
     }
     if (me.usedPowerUps.includes(powerUpId)) {
       throw new BadRequestException('Ya usaste ese power up');
@@ -499,7 +475,11 @@ export class MatchesService {
     }
 
     const winnerSide: Side | null =
-      p1.hearts === p2.hearts ? null : p1.hearts > p2.hearts ? 'player1' : 'player2';
+      p1.hearts === p2.hearts
+        ? null
+        : p1.hearts > p2.hearts
+          ? 'player1'
+          : 'player2';
 
     return this.finish(
       match,
@@ -516,9 +496,6 @@ export class MatchesService {
     reason: 'hearts' | 'round-limit' | 'inactivity' | 'disconnect' | 'forfeit',
     round: RoundSchema | null = null,
   ): Promise<RoundResolution> {
-    const p1 = match.player1;
-    const p2 = match.player2!;
-
     match.status = 'Complete';
     match.endReason = reason;
     match.finishedAt = new Date();
@@ -539,7 +516,8 @@ export class MatchesService {
       const drew = winnerSide === null;
 
       let credits =
-        roundsWon[side] * ROUND_REWARD + (won ? WIN_REWARD : drew ? 0 : LOSS_REWARD);
+        roundsWon[side] * ROUND_REWARD +
+        (won ? WIN_REWARD : drew ? 0 : LOSS_REWARD);
 
       // Doble o Nada: el doble si ganas, nada si no.
       if (player.equippedPowerUps.includes('doble')) {
