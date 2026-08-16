@@ -285,6 +285,7 @@ export class CampaignService {
     for (const id of owned) {
       if (PRE_MATCH_POWERUPS.includes(id)) {
         await this.powerUpsService.consume(userId, id);
+        await this.usersService.recordPowerUpUse(userId, id);
       }
     }
     return owned;
@@ -407,6 +408,7 @@ export class CampaignService {
     }
 
     run.usedPowerUps.push(powerUpId);
+    await this.usersService.recordPowerUpUse(userId, powerUpId);
     let revealed: Choice | null | undefined;
 
     switch (powerUpId) {
@@ -491,6 +493,16 @@ export class CampaignService {
       won: cleared,
       credits,
     });
+
+    // Las rondas de campaña también cuentan para las series de Combate: el
+    // logro va de la jugada, no de contra quién se lanzó.
+    const roundsWonByChoice: Partial<Record<Choice, number>> = {};
+    for (const r of run.rounds) {
+      if (r.winner !== 'player') continue;
+      roundsWonByChoice[r.playerChoice] =
+        (roundsWonByChoice[r.playerChoice] ?? 0) + 1;
+    }
+    await this.usersService.recordRoundsWon(userId, roundsWonByChoice);
 
     // Los logros miran las estadísticas globales; la campaña suma créditos
     // ganados, así que conviene revisarlos igual que tras un combate PvP.

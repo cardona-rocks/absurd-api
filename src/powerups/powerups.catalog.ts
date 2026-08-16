@@ -74,9 +74,8 @@ export const POWERUPS: PowerUpDefinition[] = [
   },
 ];
 
-export const POWERUP_MAP: Record<string, PowerUpDefinition> = Object.fromEntries(
-  POWERUPS.map((p) => [p.id, p]),
-);
+export const POWERUP_MAP: Record<string, PowerUpDefinition> =
+  Object.fromEntries(POWERUPS.map((p) => [p.id, p]));
 
 export function getPowerUp(id: string): PowerUpDefinition | undefined {
   return POWERUP_MAP[id];

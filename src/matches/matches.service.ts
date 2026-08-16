@@ -527,6 +527,14 @@ export class MatchesService {
 
       const perfect = won && player.hearts === player.maxHearts;
 
+      // Con qué jugada ganó cada ronda: alimenta las series de Combate.
+      const roundsWonByChoice: Partial<Record<Choice, number>> = {};
+      for (const r of match.rounds) {
+        if (r.winner !== side) continue;
+        const choice = side === 'player1' ? r.player1Choice : r.player2Choice;
+        roundsWonByChoice[choice] = (roundsWonByChoice[choice] ?? 0) + 1;
+      }
+
       await this.usersService.applyMatchResult(uid, {
         result: won ? 'win' : drew ? 'draw' : 'lose',
         credits,
@@ -534,6 +542,7 @@ export class MatchesService {
         roundsLost: roundsWon[this.other(side)],
         roundDraws,
         perfect,
+        roundsWonByChoice,
       });
 
       const gained = await this.achievementsService.sync(uid);

@@ -13,6 +13,8 @@ import {
 } from './schemas/credit-purchase.schema';
 import { AvatarsService } from '../avatars/avatars.service';
 import { SIGNUP_CREDITS } from '../common/constants/game';
+import type { Choice, PowerUpId } from '../common/constants/game';
+import { applyCredits } from '../common/credits';
 import { isEnemyCategory } from '../common/constants/catalog';
 
 export interface CreateUserDto {
@@ -32,6 +34,8 @@ export interface MatchResult {
   roundsLost: number;
   roundDraws: number;
   perfect: boolean;
+  /** Rondas ganadas con cada jugada, para las series de Combate. */
+  roundsWonByChoice?: Partial<Record<Choice, number>>;
 }
 
 /** Día actual en UTC como YYYY-MM-DD. */
@@ -124,7 +128,7 @@ export class UsersService {
 
   async updateCredits(userId: string, delta: number): Promise<UserDocument> {
     const user = await this.getOrThrow(userId);
-    user.credits = Math.max(0, user.credits + delta);
+    applyCredits(user, delta);
     return user.save();
   }
 
@@ -228,7 +232,8 @@ export class UsersService {
       throw new BadRequestException('No tienes créditos suficientes');
     }
 
-    user.credits -= avatar.price;
+    // Comprar rompe la racha de acumulación del Acaparador.
+    applyCredits(user, -avatar.price);
     // El primer avatar comprado se selecciona automáticamente.
     if (!user.avatar) user.avatar = avatar._id;
     await user.save();
@@ -266,11 +271,39 @@ export class UsersService {
     c.lastPlayedAt = new Date();
 
     if (r.credits > 0) {
-      user.credits += r.credits;
+      applyCredits(user, r.credits);
       user.stats.creditsEarned += r.credits;
     }
 
     await user.save();
+  }
+
+  /**
+   * Apunta el uso de un power up.
+   *
+   * Se cuenta al activarlo, no al comprarlo: las series de Arsenal premian
+   * usarlos, y tener el inventario lleno no dice nada.
+   */
+  async recordPowerUpUse(userId: string, powerUpId: PowerUpId): Promise<void> {
+    await this.userModel
+      .updateOne(
+        { _id: userId },
+        { $inc: { [`stats.powerUpsUsed.${powerUpId}`]: 1 } },
+      )
+      .exec();
+  }
+
+  /** Suma rondas ganadas con cada jugada. */
+  async recordRoundsWon(
+    userId: string,
+    byChoice: Partial<Record<Choice, number>>,
+  ): Promise<void> {
+    const inc: Record<string, number> = {};
+    for (const [choice, n] of Object.entries(byChoice)) {
+      if (n && n > 0) inc[`stats.roundsWonByChoice.${choice}`] = n;
+    }
+    if (!Object.keys(inc).length) return;
+    await this.userModel.updateOne({ _id: userId }, { $inc: inc }).exec();
   }
 
   // ---------------------------------------------------------- estadísticas
@@ -292,7 +325,14 @@ export class UsersService {
     if (r.perfect) stats.perfectWins += 1;
     stats.creditsEarned += r.credits;
 
-    user.credits += r.credits;
+    applyCredits(user, r.credits);
+
+    // Rondas ganadas con cada jugada: alimentan las series de Combate.
+    for (const [choice, n] of Object.entries(r.roundsWonByChoice ?? {})) {
+      if (!n) continue;
+      const key = choice as Choice;
+      stats.roundsWonByChoice[key] = (stats.roundsWonByChoice[key] ?? 0) + n;
+    }
 
     if (r.result === 'win') {
       user.streak.currentWins += 1;

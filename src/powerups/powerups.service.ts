@@ -1,7 +1,12 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from '../users/schemas/user.schema';
+import { applyCredits } from '../common/credits';
 import { POWERUPS, POWERUP_MAP, PowerUpDefinition } from './powerups.catalog';
 import { PowerUpId } from '../common/constants/game';
 
@@ -58,7 +63,7 @@ export class PowerUpsService {
       throw new BadRequestException('No tienes créditos suficientes');
     }
 
-    user.credits -= cost;
+    applyCredits(user, -cost);
     const entry = (user.powerUps ?? []).find((p) => p.powerUpId === def.id);
     if (entry) {
       entry.quantity += quantity;
@@ -85,7 +90,10 @@ export class PowerUpsService {
   async consume(userId: string, powerUpId: PowerUpId): Promise<boolean> {
     const result = await this.userModel
       .updateOne(
-        { _id: userId, powerUps: { $elemMatch: { powerUpId, quantity: { $gt: 0 } } } },
+        {
+          _id: userId,
+          powerUps: { $elemMatch: { powerUpId, quantity: { $gt: 0 } } },
+        },
         { $inc: { 'powerUps.$.quantity': -1 } },
       )
       .exec();

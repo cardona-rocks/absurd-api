@@ -24,6 +24,10 @@ export class PowerUpsController {
     @CurrentUser('sub') userId: string,
     @Body() dto: PurchasePowerUpDto,
   ) {
-    return this.powerUpsService.purchase(userId, dto.powerUpId, dto.quantity ?? 1);
+    return this.powerUpsService.purchase(
+      userId,
+      dto.powerUpId,
+      dto.quantity ?? 1,
+    );
   }
 }

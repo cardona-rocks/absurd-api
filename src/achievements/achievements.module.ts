@@ -5,7 +5,9 @@ import { AchievementsController } from './achievements.controller';
 import { User, UserSchema } from '../users/schemas/user.schema';
 
 @Module({
-  imports: [MongooseModule.forFeature([{ name: User.name, schema: UserSchema }])],
+  imports: [
+    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+  ],
   controllers: [AchievementsController],
   providers: [AchievementsService],
   exports: [AchievementsService],
